@@ -1,0 +1,27 @@
+# CaseFlow Knowledge Base — Manifest
+# ─────────────────────────────────────────────────────────────────
+# Run with:
+#   python -m knowledge_pipeline.ingest_knowledge --manifest knowledge_pipeline/sources.yaml --auto-create
+#
+# Spec keys per entry:
+#   url   : URL ของ PDF (จะ download ผ่าน Crawl4AI)
+#   file  : path ไฟล์ในเครื่อง
+#   type  : Textbook | Guideline | Slides | Exam_Prep (optional)
+#   force : true → re-ingest แม้จะมีใน index แล้ว
+
+sources:
+  # ── ตัวอย่าง guideline ──
+  # - url:  https://ginasthma.org/wp-content/uploads/2025/GINA-2025-Main-Report.pdf
+  #   type: Guideline
+  # - url:  https://kdigo.org/wp-content/uploads/2024/01/KDIGO-2024-CKD-Guideline.pdf
+  #   type: Guideline
+
+  # ── ตัวอย่าง textbook (local file) ──
+  # - file: ./inbox/harrisons_internal_medicine.pdf
+  #   type: Textbook
+
+  # ── reserved สำหรับ branch สรุปสอบในอนาคต ──
+  # - pair:
+  #     content: ./inbox/cardio_textbook.pdf
+  #     exam:    ./inbox/cardio_pastexam.pdf
+  #     type:    Exam_Prep

@@ -1,0 +1,27 @@
+{
+  "session_id": "1e596b27-8d29-4be8-b04a-f9c1d180e65f",
+  "created_at": "20260514_0054",
+  "patient_data": "ลองเรียกหาข้อมูล GINA guideline",
+  "draft": "ขออภัย — ระบบ Query Agent ขัดข้องในขณะนี้ ไม่สามารถดึงข้อมูลจาก Knowledge Base ได้\n\n**แนะนำให้ลองใหม่อีกครั้ง** หรือติดต่อผู้ดูแลระบบหากปัญหายังคงอยู่\n\n---\n\n*CaseFlow v2.1 — Branch B*",
+  "qa_review": "**ความเชื่อมั่น:** 🔴 ต่ำ\n\n**⚠️ จุดที่ควรตรวจสอบ:**\n- รายงานนี้ไม่มีเนื้อหาทางคลินิกใดๆ — เป็นเพียง error message จากระบบ ไม่มี claim ทางการแพทย์ให้ตรวจสอบ hallucination\n\n**🔍 ตรรกะทางคลินิก:**\n- ไม่มีเนื้อหาให้ประเมิน เนื่องจาก pipeline ล้มเหลวตั้งแต่ขั้นตอน researcher agent\n\n**📋 ประเด็นที่ขาด:**\n- ข้อมูล GINA guideline ที่ผู้ใช้ต้องการทั้งหมด เช่น การจำแนก severity, step therapy, controller/reliever medications, monitoring parameters\n- รายงานนี้ไม่ตอบสนองต่อ input ของผู้ใช้แต่อย่างใด\n\n**💡 คำแนะนำก่อน approve:**\n- **อย่า approve** รายงานนี้ — เป็น system error ไม่ใช่รายงานทางคลินิก\n- ลองรัน pipeline ใหม่อีกครั้ง\n- หาก error ยังคงอยู่ ให้ติดต่อผู้ดูแลระบบเพื่อตรวจสอบ researcher agent",
+  "version": 1,
+  "branch": "B",
+  "history": [],
+  "feedback_history": [],
+  "_nav_result": {
+    "mode": "followup",
+    "branch": null,
+    "patient_data": "",
+    "directives": [
+      {
+        "target": "kb_retrieval",
+        "instruction": "หา GINA guideline"
+      }
+    ],
+    "parallel_tasks": [
+      "kb_retrieval"
+    ]
+  },
+  "_pending_branch": null,
+  "_pending_plan": null
+}

@@ -1,0 +1,10 @@
+{
+  "cardiology": "NOTEBOOK_ID_HERE",
+  "nephrology": "NOTEBOOK_ID_HERE",
+  "endocrine": "9f3045f0-6428-4f99-99a4-3ad37756ba6a",
+  "pulmonology": "19a7fae8-05b3-462c-a8b9-71550ebc3d5b",
+  "infectious_disease": "NOTEBOOK_ID_HERE",
+  "pharmacology": "NOTEBOOK_ID_HERE",
+  "symptom_approach": "5066c055-068d-42e9-b2a4-1aa6bbfc314f",
+  "interpretation": "NOTEBOOK_ID_HERE"
+}

@@ -1,0 +1,25 @@
+{
+  "session_id": "0296309d-ccb9-459a-bd72-7b88a5d12134",
+  "created_at": "20260514_0104",
+  "patient_data": "ลองเรียกหาข้อมูล GINA guideline",
+  "draft": "ขออภัย — ระบบ Query Agent ขัดข้อง ไม่สามารถดึงข้อมูลจาก Knowledge Base ได้ในขณะนี้\n\n**แนะนำให้ดำเนินการ:**\n- ลองส่งคำถามใหม่อีกครั้ง\n- หากยังพบปัญหา กรุณาแจ้ง admin เพื่อตรวจสอบระบบ\n\n*CaseFlow v2.1 — Branch B*",
+  "qa_review": "**ความเชื่อมั่น:** 🔴 ต่ำ\n\n**⚠️ จุดที่ควรตรวจสอบ:**\n- รายงานนี้ **ไม่ใช่รายงานทางคลินิก** — เป็นข้อความ error จากระบบ ไม่มีเนื้อหา GINA guideline ใดๆ เลย\n- Researcher agent ล้มเหลว (`ERROR_AGENT_FAILED`) จึงไม่มี evidence/source รองรับ\n\n**🔍 ตรรกะทางคลินิก:**\n- ไม่สามารถประเมินได้ เนื่องจากไม่มีเนื้อหาทางคลินิกในรายงาน\n\n**📋 ประเด็นที่ขาด:**\n- เนื้อหา GINA guideline ทั้งหมด (เช่น การจำแนก severity, step therapy, controller/reliever medications, monitoring)\n\n**💡 คำแนะนำก่อน approve:**\n- **อย่า approve รายงานนี้** — ไม่มีข้อมูลใดที่ใช้งานได้จริง\n- ลองส่ง query ใหม่อีกครั้ง หาก researcher agent ยังล้มเหลวซ้ำ ให้แจ้ง admin ตรวจสอบการเชื่อมต่อ Knowledge Base\n- ตรวจสอบว่า input เป็น **patient case จริง** (มีข้อมูลผู้ป่วย) ไม่ใช่คำสั่งเรียก guideline โดยตรง เพราะ Branch B ออกแบบมาสำหรับการวิเคราะห์เคส",
+  "version": 1,
+  "branch": "B",
+  "history": [],
+  "feedback_history": [],
+  "_nav_result": {
+    "mode": "followup",
+    "branch": null,
+    "patient_data": "",
+    "directives": [
+      {
+        "target": "kb_retrieval",
+        "instruction": "ค้นหาข้อมูล GINA guideline (Global Initiative for Asthma)"
+      }
+    ],
+    "parallel_tasks": []
+  },
+  "_pending_branch": null,
+  "_pending_plan": null
+}

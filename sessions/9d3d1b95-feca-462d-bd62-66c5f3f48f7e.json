@@ -1,0 +1,34 @@
+{
+  "session_id": "9d3d1b95-feca-462d-bd62-66c5f3f48f7e",
+  "created_at": "20260512_0113",
+  "patient_data": "",
+  "draft": "## ⚠️ Request ว่างเปล่า\n\nไม่พบข้อมูลหรือคำถามใน input ของคุณ\n\nกรุณาระบุสิ่งที่ต้องการ เช่น\n\n- 📋 **\"วิเคราะห์เคสนี้\"** — วาง history/case ที่ต้องการให้วิเคราะห์\n- 💊 **\"อธิบายยา X\"** — ระบุชื่อยาที่ต้องการทราบข้อมูล\n- 🫀 **\"แปลผล EKG นี้\"** — วาง EKG findings หรือ description\n- 🔬 **\"แปลผล Lab นี้\"** — วาง lab results ที่ต้องการ interpret\n- 📚 **\"สรุป topic นี้\"** — ระบุหัวข้อที่ต้องการ\n\n---\n\n💡 **ตัวอย่าง input ที่ดี:**\n> *\"วิเคราะห์เคสนี้: ผู้ป่วยชาย 65 ปี มาด้วย chest pain 2 ชั่วโมง มี DM, HT...\"*",
+  "version": 1,
+  "branch": "U",
+  "history": [],
+  "feedback_history": [],
+  "_nav_result": {
+    "mode": "followup",
+    "branch": null,
+    "patient_data": "",
+    "directives": [
+      {
+        "target": "researcher",
+        "instruction": "ค้นหา ACS guideline 2025 ฉบับล่าสุด (ACC/AHA หรือ ESC) พร้อมสรุปประเด็นสำคัญ"
+      },
+      {
+        "target": "kb_retrieval",
+        "instruction": "ดึงข้อมูล ACS guideline ที่มีใน KB เพื่อเปรียบเทียบกับฉบับ 2025"
+      },
+      {
+        "target": "formatter",
+        "instruction": "สรุปเนื้อหา ACS guideline 2025 เป็นหมวดหมู่ชัดเจน เช่น diagnosis, risk stratification, antiplatelet therapy, reperfusion strategy, post-ACS management"
+      }
+    ],
+    "parallel_tasks": [
+      "researcher",
+      "kb_retrieval"
+    ]
+  },
+  "_pending_plan": null
+}

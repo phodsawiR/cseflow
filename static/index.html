@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CaseFlow</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --border: #dde1e7;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --success-hover: #15803d;
+      --danger: #dc2626;
+      --warning-bg: #fffbeb;
+      --warning-border: #f59e0b;
+      --text: #111827;
+      --muted: #6b7280;
+      --radius: 12px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    body {
+      background: var(--bg);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 17px;
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 80px;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: var(--primary);
+      color: #fff;
+      padding: 14px 18px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    #header h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+    #session-info {
+      font-size: 13px;
+      opacity: 0.85;
+      text-align: right;
+      line-height: 1.5;
+    }
+
+    /* ── Content ── */
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h2 { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 12px; }
+
+    /* ── Textarea ── */
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 14px;
+      font-size: 16px;
+      font-family: inherit;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      resize: vertical;
+      line-height: 1.6;
+      color: var(--text);
+      background: #fafbfc;
+      transition: border-color 0.15s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: #fff;
+    }
+    textarea::placeholder { color: #9ca3af; }
+
+    /* ── Inputs ── */
+    .input-field {
+      padding: 10px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      background: #fafbfc;
+      transition: border-color 0.15s;
+    }
+    .input-field:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: #fff;
+    }
+    .input-field::placeholder { color: #9ca3af; }
+    
+    input[type="file"].input-field {
+      padding: 8px 10px;
+      background: #fff;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 48px;
+      padding: 0 22px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover:not(:disabled) { background: var(--success-hover); }
+    .btn-outline {
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+    }
+    .btn-outline:hover:not(:disabled) { background: #eff6ff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-full { width: 100%; }
+
+    .kb-tab {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .kb-tab:hover { color: var(--text); }
+    .kb-tab-active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 600;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .btn-row .btn { flex: 1; min-width: 120px; }
+
+    /* ── Draft output ── */
+    #draft-output {
+      font-size: 16px;
+      line-height: 1.75;
+      overflow-x: auto;
+    }
+    #draft-output h1,h2,h3 { margin: 16px 0 8px; font-size: 1em; }
+    #draft-output h1 { font-size: 1.1em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    #draft-output p { margin-bottom: 10px; }
+    #draft-output ul, #draft-output ol { margin: 8px 0 10px 22px; }
+    #draft-output li { margin-bottom: 4px; }
+    #draft-output table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+    #draft-output th, #draft-output td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+    #draft-output th { background: #f3f4f6; font-weight: 600; }
+    #draft-output strong { font-weight: 700; }
+    #draft-output code { background: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-size: 14px; }
+    #draft-output pre { background: #f3f4f6; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+    #draft-output blockquote { border-left: 3px solid var(--primary); padding-left: 12px; color: var(--muted); margin: 10px 0; }
+
+    /* ── Confirm box (Branch U) ── */
+    #confirm-section {
+      background: var(--warning-bg);
+      border: 1.5px solid var(--warning-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    #confirm-section h2 { font-size: 15px; color: #92400e; margin-bottom: 14px; }
+    .divider { text-align: center; color: var(--muted); font-size: 14px; margin: 14px 0; }
+
+    /* ── Status messages ── */
+    #status-bar {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 14px;
+      display: none;
+    }
+    #status-bar.loading { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; display: flex; align-items: center; gap: 10px; }
+    #status-bar.error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; display: block; }
+    #status-bar.success { background: #f0fdf4; color: var(--success); border: 1px solid #bbf7d0; display: block; }
+
+    /* Spinner */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid #bfdbfe;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Saved banner ── */
+    #saved-banner {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      text-align: center;
+      display: none;
+    }
+    #saved-banner p { font-size: 16px; color: var(--success); font-weight: 600; margin-bottom: 14px; }
+
+    /* ── QA Review card ── */
+    #qa-card {
+      background: #fffbeb;
+      border: 1.5px solid #f59e0b;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    #qa-card h2 { font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 10px; }
+    #qa-output { font-size: 14px; line-height: 1.7; color: #1c1917; }
+    #qa-output p { margin-bottom: 8px; }
+    #qa-output ul { margin: 4px 0 8px 18px; }
+    #qa-output li { margin-bottom: 3px; }
+    #qa-output strong { font-weight: 700; }
+
+    /* ── Progress panel ── */
+    #progress-panel { padding: 16px 20px; }
+    #progress-panel h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
+    .step-row {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: 15px;
+    }
+    .step-row:last-child { border-bottom: none; }
+    .step-icon { width: 22px; text-align: center; font-size: 15px; flex-shrink: 0; }
+    .step-label { flex: 1; min-width: 0; }
+    .step-detail { font-size: 12px; color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .step-running .step-icon { display: inline-block; animation: spin 1s linear infinite; color: var(--primary); }
+    .step-running .step-label { color: var(--primary); font-weight: 600; }
+    .step-done .step-icon { color: var(--success); }
+    .step-error .step-icon { color: var(--danger); }
+    /* Progress bar inside a running step */
+    .step-progress {
+      flex-basis: 100%;
+      margin-left: 32px;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .step-progress-fill {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.35s ease;
+    }
+    .step-done .step-progress-fill { background: var(--success); }
+    .step-error .step-progress-fill { background: var(--danger); }
+    .step-progress-label {
+      flex-basis: 100%;
+      margin-left: 32px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .step-error .step-label { color: var(--danger); }
+
+    /* Hidden utility */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <h1>🏥 CaseFlow</h1>
+  <div id="session-info" class="hidden">
+    <div id="info-branch">Branch —</div>
+    <div id="info-version">v—</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Status bar -->
+  <div id="status-bar"></div>
+
+  <!-- ── Section 1: Input ─────────────────────────────── -->
+  <div id="input-section" class="card">
+    <h2>ข้อมูลผู้ป่วย / คำถาม</h2>
+    <textarea id="input-text"
+      placeholder="ชาย 65 ปี มาด้วย dyspnea 3 วัน bilateral pitting edema&#10;PMH: HT, DM II&#10;BP 150/95  HR 110  RR 24  SpO2 90% RA&#10;..."
+      rows="7"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-full" onclick="startCase()">ส่ง →</button>
+    </div>
+  </div>
+
+  <!-- ── Section KB: PDF Upload ───────────────────────── -->
+  <div id="kb-section" class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleKB()">
+      <h2 style="margin:0;">📚 เพิ่มข้อมูลเข้า Knowledge Base (PDF)</h2>
+      <span id="kb-toggle-icon" style="color:var(--muted); font-size:12px;">▼</span>
+    </div>
+    <div id="kb-content" class="hidden" style="margin-top:16px;">
+      <!-- Mode tabs -->
+      <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border);">
+        <button class="kb-tab kb-tab-active" data-mode="single" onclick="switchKBMode('single')">1 ไฟล์</button>
+        <button class="kb-tab" data-mode="manifest" onclick="switchKBMode('manifest')">Manifest (YAML)</button>
+        <button class="kb-tab" data-mode="inbox" onclick="switchKBMode('inbox')">Inbox Folder</button>
+      </div>
+
+      <!-- Mode 1: Single file/URL (existing) -->
+      <div id="kb-mode-single">
+        <div style="margin-bottom:12px;">
+          <label style="font-size:14px; font-weight:600; display:block; margin-bottom:6px;">อัพโหลดไฟล์ PDF</label>
+          <input type="file" id="kb-file" accept=".pdf" class="input-field" style="width:100%;" />
+        </div>
+        <div style="text-align:center; margin-bottom:12px; font-size:14px; color:var(--muted);">── หรือ ──</div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:14px; font-weight:600; display:block; margin-bottom:6px;">ลิงก์ PDF (URL)</label>
+          <input type="url" id="kb-link" placeholder="https://example.com/document.pdf" class="input-field" style="width:100%;" />
+        </div>
+        <div style="margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="kb-fast" style="width:18px; height:18px;" checked />
+          <label for="kb-fast" style="font-size:14px; color:var(--text);">โหมดด่วน (Fast Mode) - สำหรับไฟล์ใหญ่ / RAM น้อย</label>
+        </div>
+        <button class="btn btn-outline btn-full" onclick="uploadKB()">นำเข้า KB</button>
+      </div>
+
+      <!-- Mode 2: Manifest YAML -->
+      <div id="kb-mode-manifest" class="hidden">
+        <div style="margin-bottom:12px; padding:10px; background:rgba(99,102,241,0.08); border-radius:6px; font-size:13px; color:var(--muted);">
+          วาง YAML manifest รายการ URLs/ไฟล์ → ระบบจะ ingest ทุกอันทีละตัวอัตโนมัติ
+        </div>
+        <label style="font-size:14px; font-weight:600; display:block; margin-bottom:6px;">Manifest YAML</label>
+        <textarea id="kb-manifest" rows="12" class="input-field" style="width:100%; font-family:monospace; font-size:13px;"
+placeholder="sources:
+  - url: https://ginasthma.org/wp-content/uploads/2025/GINA-2025.pdf
+    type: Guideline
+  - url: https://www.kidney.org/sites/default/files/kdigo-2024.pdf
+    type: Guideline
+  - file: ./inbox/harrisons_cardio.pdf
+    type: Textbook"></textarea>
+        <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
+          <label style="font-size:14px; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="kb-batch-autocreate" checked /> Auto-create notebook
+          </label>
+          <label style="font-size:14px; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="kb-batch-fast" checked /> Fast mode
+          </label>
+        </div>
+        <button class="btn btn-outline btn-full" style="margin-top:12px;" onclick="uploadKBBatch()">▶ Run Manifest Batch</button>
+      </div>
+
+      <!-- Mode 3: Inbox folder -->
+      <div id="kb-mode-inbox" class="hidden">
+        <div style="margin-bottom:12px; padding:10px; background:rgba(99,102,241,0.08); border-radius:6px; font-size:13px; color:var(--muted);">
+          วางไฟล์ PDF ใน <code>./inbox/</code> บน server แล้วกดปุ่มด้านล่าง — ระบบจะ ingest ทุกไฟล์อัตโนมัติ
+        </div>
+        <button class="btn btn-outline btn-full" style="margin-bottom:12px;" onclick="scanInbox()">🔄 Scan ./inbox/</button>
+        <div id="kb-inbox-listing" style="font-size:13px; color:var(--text);"></div>
+        <div style="margin-top:12px; display:flex; gap:12px; flex-wrap:wrap;">
+          <label style="font-size:14px; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="kb-inbox-autocreate" checked /> Auto-create notebook
+          </label>
+          <label style="font-size:14px; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="kb-inbox-fast" checked /> Fast mode
+          </label>
+          <label style="font-size:14px; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="kb-inbox-archive" checked /> ย้ายไฟล์ไป processed/ เมื่อเสร็จ
+          </label>
+        </div>
+        <button class="btn btn-outline btn-full" style="margin-top:12px;" onclick="uploadKBInbox()">▶ Ingest All from Inbox</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Draft result ─────────────────────── -->
+  <div id="result-section" class="hidden">
+
+    <!-- Progress panel -->
+    <div id="progress-panel" class="card hidden">
+      <h2>ความคืบหน้า</h2>
+      <div id="progress-steps"></div>
+    </div>
+
+    <!-- KB Input Prompt -->
+    <div id="kb-confirm-section" class="card hidden" style="background: var(--warning-bg); border-color: var(--warning-border);">
+      <h2 id="kb-confirm-title" style="color: #92400e; margin-bottom: 14px;">⚠️ ระบบต้องการข้อมูลเพิ่มเติม</h2>
+      <textarea id="kb-input-text" placeholder="พิมพ์คำตอบของคุณ..." rows="2" style="background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 10px; width: 100%; margin-bottom: 12px; font-family: inherit; font-size: 14px; box-sizing: border-box;"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-full" onclick="sendKBInput()">ส่งคำตอบ →</button>
+      </div>
+    </div>
+
+    <!-- Interactive Prompt (Branch U / Branch Confirmation) -->
+    <div id="confirm-section" class="card hidden" style="background: var(--warning-bg); border-color: var(--warning-border);">
+      <h2 style="color: #92400e; margin-bottom: 14px;">⚠️ ระบบต้องการคำตอบ / ยืนยัน</h2>
+      <div class="btn-row" style="margin-bottom: 16px;">
+        <button class="btn btn-success" style="flex: 1;" onclick="confirmPlan()">👍 ตกลง / ดำเนินการตามแผน</button>
+      </div>
+      <div class="divider" style="margin-bottom: 12px;">── หรือพิมพ์ตอบกลับ ──</div>
+      <textarea id="modify-text" placeholder="พิมพ์คำตอบของคุณ (เช่น yes, no) หรือระบุสิ่งที่ต้องการปรับแก้..." rows="2" style="background: #fff;"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-full" onclick="modifyPlan()">ส่งคำตอบ →</button>
+      </div>
+    </div>
+
+    <!-- Draft display -->
+    <div class="card">
+      <h2 id="draft-label">ผลลัพธ์</h2>
+      <div id="draft-output"></div>
+    </div>
+
+    <!-- QA Review -->
+    <div id="qa-card" class="hidden">
+      <h2>🔍 AI Quality Check</h2>
+      <div id="qa-output"></div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="card" id="feedback-card">
+      <h2>แก้ไข / เพิ่มเติม</h2>
+      <textarea id="feedback-text" placeholder="เช่น เพิ่ม PE risk assessment, ขยาย DDx, แก้ยา..." rows="3"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-outline" onclick="sendFeedback()">ส่ง feedback</button>
+        <button class="btn btn-success" onclick="approveReport()">💾 บันทึก report</button>
+      </div>
+    </div>
+
+    <!-- Saved confirmation -->
+    <div id="saved-banner">
+      <p id="saved-msg">✅ บันทึกเรียบร้อย</p>
+      <div class="btn-row">
+        <a id="pdf-btn" class="btn btn-success hidden" target="_blank">📄 ดูรายงาน / PDF</a>
+        <button class="btn btn-primary" onclick="resetUI()">เริ่มเคสใหม่</button>
+      </div>
+    </div>
+
+    <!-- Footer actions -->
+    <div style="display:flex; gap:10px; margin-top:4px;">
+      <button class="btn btn-outline" style="flex:1; height:40px; font-size:14px;" onclick="resetUI()">+ เคสใหม่</button>
+      <button class="btn btn-outline" style="height:40px; font-size:14px; color:#dc2626; border-color:#dc2626;"
+        onclick="deleteSession()">ลบ session</button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let sessionId = null;
+  let currentBranch = '';
+  let currentVersion = 0;
+  let needsConfirm = false;
+
+  const BRANCH_LABELS = {
+    A: 'Branch A — Case Analysis',
+    B: 'Branch B — Knowledge Query',
+    C: 'Branch C — Symptom Approach',
+    D: 'Branch D — Progress Note',
+    E: 'Branch E — Morning Round',
+    F: 'Branch F — Interpreter',
+    G: 'Branch G — Admission Note',
+    U: 'Branch U — Freestyle',
+  };
+
+  // ── UI helpers ──────────────────────────────────────────────────────────────
+  function showStatus(type, msg) {
+    const el = document.getElementById('status-bar');
+    el.className = type;
+    if (type === 'loading') {
+      el.innerHTML = `<div class="spinner"></div><span>${msg}</span>`;
+    } else {
+      el.textContent = msg;
+    }
+  }
+
+  function hideStatus() {
+    const el = document.getElementById('status-bar');
+    el.className = '';
+    el.style.display = 'none';
+  }
+
+  function setLoading(on) {
+    document.querySelectorAll('button, textarea, input').forEach(el => {
+      // Don't disable if it's inside an interactive prompt section
+      if (el.closest('#kb-confirm-section') || el.closest('#confirm-section')) {
+        return;
+      }
+      el.disabled = on;
+    });
+
+    if (on) showStatus('loading', 'กำลังประมวลผล... (อาจใช้เวลา 1–3 นาที)');
+    else hideStatus();
+  }
+
+  function renderDraft(text) {
+    document.getElementById('draft-output').innerHTML = marked.parse(text || '');
+  }
+
+  function updateSessionInfo() {
+    if (!sessionId) return;
+    document.getElementById('session-info').classList.remove('hidden');
+    document.getElementById('info-branch').textContent = BRANCH_LABELS[currentBranch] || `Branch ${currentBranch}`;
+    document.getElementById('info-version').textContent = `v${currentVersion}  ·  ${sessionId.slice(0, 8)}`;
+  }
+
+  function applyState(data) {
+    sessionId = data.session_id;
+    currentBranch = data.branch;
+    currentVersion = data.version;
+    needsConfirm = data.needs_confirm;
+
+    updateSessionInfo();
+    renderDraft(data.draft);
+
+    const qaCard = document.getElementById('qa-card');
+    const qaOutput = document.getElementById('qa-output');
+    if (data.qa_review) {
+      qaOutput.innerHTML = marked.parse(data.qa_review);
+      qaCard.classList.remove('hidden');
+    } else {
+      qaCard.classList.add('hidden');
+    }
+
+    const confirmSec = document.getElementById('confirm-section');
+    const feedbackCard = document.getElementById('feedback-card');
+    const draftLabel = document.getElementById('draft-label');
+
+    if (needsConfirm) {
+      confirmSec.classList.remove('hidden');
+      feedbackCard.classList.add('hidden');
+      draftLabel.textContent = 'แผนการทำงาน';
+    } else {
+      confirmSec.classList.add('hidden');
+      feedbackCard.classList.remove('hidden');
+      draftLabel.textContent = 'ผลลัพธ์';
+    }
+
+    document.getElementById('input-section').classList.add('hidden');
+    document.getElementById('result-section').classList.remove('hidden');
+    document.getElementById('saved-banner').style.display = 'none';
+  }
+
+  function resetUI() {
+    sessionId = null;
+    currentBranch = '';
+    currentVersion = 0;
+    needsConfirm = false;
+
+    document.getElementById('input-text').value = '';
+    document.getElementById('feedback-text').value = '';
+    document.getElementById('modify-text').value = '';
+    document.getElementById('draft-output').innerHTML = '';
+    document.getElementById('saved-banner').style.display = 'none';
+    document.getElementById('session-info').classList.add('hidden');
+
+    document.getElementById('input-section').classList.remove('hidden');
+    document.getElementById('result-section').classList.add('hidden');
+    document.getElementById('progress-panel').classList.add('hidden');
+    document.getElementById('progress-steps').innerHTML = '';
+    document.getElementById('qa-card').classList.add('hidden');
+    document.getElementById('qa-output').innerHTML = '';
+    stopProgressPolling();
+    hideStatus();
+  }
+
+  // ── API calls ───────────────────────────────────────────────────────────────
+  async function api(endpoint, body) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    return data;
+  }
+
+  function toggleKB() {
+    const content = document.getElementById('kb-content');
+    const icon = document.getElementById('kb-toggle-icon');
+    if (content.classList.contains('hidden')) {
+      content.classList.remove('hidden');
+      icon.textContent = '▲';
+    } else {
+      content.classList.add('hidden');
+      icon.textContent = '▼';
+    }
+  }
+
+  async function uploadKB() {
+    const fileInput = document.getElementById('kb-file');
+    const linkInput = document.getElementById('kb-link');
+    const file = fileInput.files[0];
+    const link = linkInput.value.trim();
+    const fast = document.getElementById('kb-fast').checked;
+
+    if (!file && !link) {
+      showStatus('error', 'กรุณาเลือกไฟล์ PDF หรือใส่ลิงก์ PDF');
+      setTimeout(hideStatus, 3000);
+      return;
+    }
+
+    setLoading(true);
+    showStatus('loading', 'กำลังนำเข้าข้อมูลไปยัง Knowledge Base...');
+
+    try {
+      const formData = new FormData();
+      if (file) {
+        formData.append('file', file);
+      }
+      if (link) {
+        formData.append('link', link);
+      }
+      formData.append('fast', fast);
+
+      const res = await fetch('/upload_kb', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      
+      const kbSessionId = data.session_id;
+      if (data.processing) {
+        // Show progress panel for KB upload
+        document.getElementById('progress-panel').classList.remove('hidden');
+        document.getElementById('result-section').classList.remove('hidden'); // Ensure container is visible
+        pollKBProgress(kbSessionId);
+      }
+      
+      fileInput.value = '';
+      linkInput.value = '';
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      setLoading(false);
+    }
+  }
+
+  function switchKBMode(mode) {
+    ['single', 'manifest', 'inbox'].forEach(m => {
+      document.getElementById(`kb-mode-${m}`).classList.toggle('hidden', m !== mode);
+    });
+    document.querySelectorAll('.kb-tab').forEach(b => {
+      b.classList.toggle('kb-tab-active', b.dataset.mode === mode);
+    });
+  }
+
+  async function uploadKBBatch() {
+    const manifest_text = document.getElementById('kb-manifest').value.trim();
+    if (!manifest_text) {
+      showStatus('error', 'กรุณาวาง YAML manifest ก่อน');
+      setTimeout(hideStatus, 3000);
+      return;
+    }
+    const auto_create = document.getElementById('kb-batch-autocreate').checked;
+    const fast        = document.getElementById('kb-batch-fast').checked;
+
+    setLoading(true);
+    showStatus('loading', 'กำลังเริ่ม batch ingestion...');
+    try {
+      const res = await fetch('/upload_kb_batch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ manifest_text, auto_create, fast }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      showStatus('success', `เริ่ม batch แล้ว (${data.total} sources)`);
+      document.getElementById('progress-panel').classList.remove('hidden');
+      document.getElementById('result-section').classList.remove('hidden');
+      pollKBProgress(data.session_id);
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      setLoading(false);
+    }
+  }
+
+  async function scanInbox() {
+    const out = document.getElementById('kb-inbox-listing');
+    out.innerHTML = '<em>กำลัง scan...</em>';
+    try {
+      const res = await fetch('/scan_inbox');
+      const data = await res.json();
+      if (data.count === 0) {
+        out.innerHTML = `<em style="color:var(--muted);">ไม่พบไฟล์ PDF ใน ${data.inbox_dir}</em>`;
+        return;
+      }
+      out.innerHTML = `<strong>${data.count} ไฟล์:</strong><br>` +
+        data.files.map(f => `&nbsp;• ${f}`).join('<br>');
+    } catch (e) {
+      out.innerHTML = `<span style="color:var(--err);">❌ ${e.message}</span>`;
+    }
+  }
+
+  async function uploadKBInbox() {
+    const auto_create = document.getElementById('kb-inbox-autocreate').checked;
+    const fast        = document.getElementById('kb-inbox-fast').checked;
+    const archive     = document.getElementById('kb-inbox-archive').checked;
+
+    setLoading(true);
+    showStatus('loading', 'กำลังเริ่ม inbox ingestion...');
+    try {
+      const res = await fetch('/upload_kb_inbox', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ auto_create, fast, archive }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      showStatus('success', `เริ่ม inbox batch แล้ว (${data.total} files)`);
+      document.getElementById('progress-panel').classList.remove('hidden');
+      document.getElementById('result-section').classList.remove('hidden');
+      pollKBProgress(data.session_id);
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      setLoading(false);
+    }
+  }
+
+  let activeKBSessionId = null;
+
+  async function sendKBInput() {
+    const text = document.getElementById('kb-input-text').value.trim();
+    if (!text) { showStatus('error', 'กรุณาระบุคำตอบ'); return; }
+    if (!activeKBSessionId) return;
+
+    setLoading(true);
+    try {
+      await api('/kb_input', { session_id: activeKBSessionId, message: text });
+      document.getElementById('kb-confirm-section').classList.add('hidden');
+      document.getElementById('kb-input-text').value = '';
+      hideStatus();
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function pollKBProgress(sid) {
+    activeKBSessionId = sid;
+    const el = document.getElementById('progress-steps');
+    const panel = document.getElementById('progress-panel');
+    panel.classList.remove('hidden');
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/progress/${sid}`);
+        const data = await res.json();
+        renderProgress(data.steps || []);
+
+        const waitingStep = data.steps && data.steps.find(s => s.status === 'waiting_input');
+        if (waitingStep) {
+          const confirmSec = document.getElementById('kb-confirm-section');
+          document.getElementById('kb-confirm-title').textContent = '⚠️ ' + (waitingStep.detail || waitingStep.label);
+          confirmSec.classList.remove('hidden');
+        } else {
+          document.getElementById('kb-confirm-section').classList.add('hidden');
+        }
+
+        if (!data.processing) {
+          clearInterval(interval);
+          setLoading(false);
+          const hasError = data.steps && data.steps.some(s => s.status === 'error');
+          if (hasError) {
+            showStatus('error', '❌ นำเข้าข้อมูลล้มเหลว ตรวจสอบรายละเอียดในรายการความคืบหน้า (หน้าต่างจะปิดใน 10 วินาที)');
+            setTimeout(() => {
+                hideStatus();
+                panel.classList.add('hidden');
+                document.getElementById('result-section').classList.add('hidden');
+                document.getElementById('kb-confirm-section').classList.add('hidden');
+                activeKBSessionId = null;
+            }, 10000);
+          } else {
+            showStatus('success', '✅ นำเข้าข้อมูลสู่ Knowledge Base สำเร็จ');
+            setTimeout(() => {
+                hideStatus();
+                panel.classList.add('hidden');
+                document.getElementById('result-section').classList.add('hidden');
+                document.getElementById('input-section').classList.remove('hidden');
+                document.getElementById('kb-confirm-section').classList.add('hidden');
+                // clear the form fields
+                document.getElementById('kb-file').value = '';
+                document.getElementById('kb-link').value = '';
+                activeKBSessionId = null;
+            }, 3000);
+          }
+        }
+      } catch (_) {
+          clearInterval(interval);
+          setLoading(false);
+          activeKBSessionId = null;
+      }
+    }, 2000);
+  }
+  async function startCase() {
+    const text = document.getElementById('input-text').value.trim();
+    if (!text) { showStatus('error', 'กรุณาใส่ข้อมูลผู้ป่วยก่อน'); return; }
+    setLoading(true);
+    try {
+      const data = await api('/start', { input: text });
+      sessionId = data.session_id;
+      document.getElementById('input-section').classList.add('hidden');
+      document.getElementById('result-section').classList.remove('hidden');
+      if (data.processing) {
+        showStatus('loading', 'กำลังประมวลผล... ระบบจะอัพเดตผลลัพธ์อัตโนมัติ');
+        pollResult();
+      } else {
+        applyState(data);
+        if (data.error) showStatus('error', `⚠️ ${data.error}`);
+        setLoading(false);
+      }
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      document.getElementById('input-section').classList.remove('hidden');
+      document.getElementById('result-section').classList.add('hidden');
+      setLoading(false);
+    }
+  }
+
+  async function sendFeedback() {
+    const msg = document.getElementById('feedback-text').value.trim();
+    if (!msg) { showStatus('error', 'กรุณาใส่ feedback ก่อน'); return; }
+    setLoading(true);
+    try {
+      const data = await api('/feedback', { session_id: sessionId, message: msg });
+      if (data.processing) {
+        showStatus('loading', 'กำลังประมวลผล... ระบบจะอัพเดตผลลัพธ์อัตโนมัติ');
+        pollResult(() => { document.getElementById('feedback-text').value = ''; });
+      } else {
+        applyState(data);
+        document.getElementById('feedback-text').value = '';
+        if (data.error) showStatus('error', `⚠️ ${data.error}`);
+        setLoading(false);
+      }
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      setLoading(false);
+    }
+  }
+
+  async function confirmPlan() {
+    setLoading(true);
+    try {
+      const data = await api('/confirm', { session_id: sessionId, message: 'ยืนยัน' });
+      applyState(data);
+      if (data.processing) {
+        showStatus('loading', 'กำลังประมวลผล... ระบบจะอัพเดตผลลัพธ์อัตโนมัติ');
+        pollResult();
+      } else if (data.error) {
+        showStatus('error', `⚠️ ${data.error}`);
+        setLoading(false);
+      } else {
+        setLoading(false);
+      }
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+      setLoading(false);
+    }
+  }
+
+  // ── Progress panel ─────────────────────────────────────────────────────────
+  let _progressInterval = null;
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function renderProgress(steps) {
+    const el = document.getElementById('progress-steps');
+    if (!steps || !steps.length) {
+      el.innerHTML = '<div class="step-row"><span class="step-icon" style="color:var(--muted)">·</span><span class="step-label" style="color:var(--muted)">เริ่มต้น...</span></div>';
+      return;
+    }
+    el.innerHTML = steps.map(s => {
+      const icons = { running: '⟳', done: '✓', error: '✕', waiting_input: '⚠️' };
+      const cls   = { running: 'step-running', done: 'step-done', error: 'step-error', waiting_input: 'step-warning' };
+      const detail = s.detail ? `<span class="step-detail" title="${escapeHtml(s.detail)}">${escapeHtml(s.detail)}</span>` : '';
+
+      // Compute progress percent (explicit percent, or derive from current/total)
+      let pct = null;
+      if (typeof s.percent === 'number') pct = Math.max(0, Math.min(100, s.percent));
+      else if (typeof s.current === 'number' && typeof s.total === 'number' && s.total > 0) {
+        pct = Math.round(s.current * 100 / s.total);
+      }
+
+      let bar = '';
+      if (pct !== null && (s.status === 'running' || s.status === 'done')) {
+        const ctLabel = (typeof s.current === 'number' && typeof s.total === 'number')
+          ? `${s.current}/${s.total} · ${pct}%`
+          : `${pct}%`;
+        bar = `
+          <div class="step-progress"><div class="step-progress-fill" style="width:${pct}%"></div></div>
+          <div class="step-progress-label">${ctLabel}</div>`;
+      }
+
+      return `<div class="step-row ${cls[s.status] || ''}">
+        <span class="step-icon">${icons[s.status] || '·'}</span>
+        <span class="step-label">${escapeHtml(s.label)}</span>
+        ${detail}
+        ${bar}
+      </div>`;
+    }).join('');
+    // scroll latest into view
+    el.lastElementChild && el.lastElementChild.scrollIntoView({ block: 'nearest' });
+  }
+
+  function startProgressPolling() {
+    const sid = sessionId;
+    document.getElementById('progress-panel').classList.remove('hidden');
+    renderProgress([]);
+    _progressInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/progress/${sid}`);
+        const data = await res.json();
+        renderProgress(data.steps || []);
+        if (!data.processing) stopProgressPolling();
+      } catch (_) {}
+    }, 2000);
+  }
+
+  function stopProgressPolling() {
+    if (_progressInterval) { clearInterval(_progressInterval); _progressInterval = null; }
+  }
+
+  function pollResult(onDone) {
+    const sid = sessionId;
+    startProgressPolling();
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/result/${sid}`);
+        const data = await res.json();
+        if (!data.processing) {
+          clearInterval(interval);
+          stopProgressPolling();
+          applyState(data);
+          if (data.error) showStatus('error', `⚠️ ${data.error}`);
+          else hideStatus();
+          if (onDone) onDone();
+          setLoading(false);
+        }
+      } catch (_) {}
+    }, 5000);
+  }
+
+  async function modifyPlan() {
+    const msg = document.getElementById('modify-text').value.trim();
+    if (!msg) { showStatus('error', 'กรุณาระบุสิ่งที่ต้องการเปลี่ยนแปลง'); return; }
+    setLoading(true);
+    try {
+      const data = await api('/feedback', { session_id: sessionId, message: msg });
+      applyState(data);
+      document.getElementById('modify-text').value = '';
+      if (data.error) showStatus('error', `⚠️ ${data.error}`);
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function approveReport() {
+    if (!confirm('บันทึก report เป็นไฟล์?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+      document.getElementById('saved-msg').textContent = `✅ บันทึกแล้ว: ${data.saved}`;
+      document.getElementById('saved-banner').style.display = 'block';
+      document.getElementById('feedback-card').classList.add('hidden');
+      if (data.view_url) {
+        document.getElementById('pdf-btn').href = data.view_url;
+        document.getElementById('pdf-btn').classList.remove('hidden');
+      }
+      hideStatus();
+    } catch (e) {
+      showStatus('error', `❌ ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteSession() {
+    if (!sessionId) return;
+    if (!confirm('ลบ session นี้?')) return;
+    try {
+      await fetch(`/session/${sessionId}`, { method: 'DELETE' });
+    } catch (_) {}
+    resetUI();
+  }
+
+  // ── Enter to submit in input textarea (Shift+Enter = newline) ──────────────
+  document.getElementById('input-text').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+      e.preventDefault();
+      startCase();
+    }
+  });
+
+  marked.setOptions({ breaks: true, gfm: true });
+</script>
+</body>
+</html>

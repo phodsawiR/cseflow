@@ -1,0 +1,23 @@
+{
+  "session_id": "5702c48a-2f6a-4fb8-aff4-afe33211e096",
+  "created_at": "20260513_0051",
+  "patient_data": "ทำสรุป ที่อ่านง่าย กระชับ เพื่อไปทำข้อสอบ preclinic เน้นความรู้ที่น่าจะออกข้อสอบเป็นหลัก จาก keyword ต่อไปนี้ที่สกัดมาจากไฟล์เรียน [​1. คู่ยาต้านมะเร็ง และ ยาแก้พิษ (Drug-Antidote Pairs) ออกสอบบ่อยที่สุด\n​Anthracyclines toxicity: จับคู่กับยา Dexrazoxane (ป้องกันพิษต่อหัวใจและรักษาภาวะยารั่วออกนอกหลอดเลือด)  \n​Irinotecan-induced diarrhea: ท้องเสียเฉียบพลันใช้ Atropine ท้องเสียระยะหน่วงใช้ Loperamide  \n​Vesicant Extravasation Antidotes: * Mechlorethamine / Cisplatin จับคู่กับ Sodium thiosulfate  \n​Taxanes (Docetaxel, Paclitaxel) / Vinca alkaloids จับคู่กับ Hyaluronidase  \n​Anthracyclines / Mitomycin จับคู่กับ DMSO (ทาเฉพาะที่)  \n​2. ผลข้างเคียงเด่นเฉพาะกลุ่มยา (Classic Specific Toxicities)\n​EGFR inhibitors: อาการเด่นคือผื่นคล้ายสิว Acneiform Rash (Papulopustular eruption)  \n​VEGF inhibitors: มักทำให้เกิดความดันโลหิตสูง (Hypertension)  \n​L-asparaginase: มักทำให้ระดับน้ำตาลในเลือดสูง (Hyperglycemia)  \n​Anthracyclines: ผลข้างเคียงร้ายแรงคือภาวะหัวใจล้มเหลว/การทำงานของหัวใจห้องล่างซ้ายผิดปกติ (Left Ventricular Dysfunction)  \n​3. กลไกการจัดการคลื่นไส้อาเจียน (CINV Pathways & Antiemetics)\n​Acute CINV (เฉียบพลัน): เกิดที่ทางเดินอาหาร (Peripheral) เกี่ยวข้องกับ Serotonin แนะนำยา 5HT3 antagonists (เช่น Ondansetron)  \n​Delayed CINV (หน่วง): เกิดที่สมอง (Central) เกี่ยวข้องกับ Substance P แนะนำยา NK1 receptor antagonists (เช่น Aprepitant)  \n​4. ภาวะฉุกเฉินและระบบเลือด (Oncologic Emergencies & Blood)\n​Tumor Lysis Syndrome (TLS): * Allopurinol: ยับยั้งเอนไซม์ Xanthine oxidase (ลดการสร้างกรดยูริก)  \n​Rasburicase: เปลี่ยนกรดยูริกเป็น Allantoin ที่ละลายน้ำได้ดีกว่า (ใช้ในรายที่มีความเสี่ยงสูงหรือมียูริกสูงแล้ว)  \n​Neutropenia: การทำงานของ G-CSF (Filgrastim) เพื่อกระตุ้นการสร้างเม็ดเลือดขาวชนิดนิวโทรฟิล  \n​ใช้ Keyword 4 กลุ่มนี้ รับรองว่าครอบคลุมจุดหลอกและจุดสำคัญในข้อสอบเภสัชวิทยาแน่นอนครับ!]",
+  "draft": "🔄 เปลี่ยนเป็น: **Branch U — Freestyle / Omni**\n\nพิมพ์ **'ยืนยัน'** เพื่อดำเนินการ",
+  "qa_review": "",
+  "version": 0,
+  "branch": "",
+  "history": [],
+  "feedback_history": [],
+  "_nav_result": {
+    "mode": "full",
+    "branch": "A",
+    "patient_data": "ทำสรุป ที่อ่านง่าย กระชับ เพื่อไปทำข้อสอบ preclinic เน้นความรู้ที่น่าจะออกข้อสอบเป็นหลัก จาก keyword ต่อไปนี้ที่สกัดมาจากไฟล์เรียน [​1. คู่ยาต้านมะเร็ง และ ยาแก้พิษ (Drug-Antidote Pairs) ออกสอบบ่อยที่สุด\n​Anthracyclines toxicity: จับคู่กับยา Dexrazoxane (ป้องกันพิษต่อหัวใจและรักษาภาวะยารั่วออกนอกหลอดเลือด)  \n​Irinotecan-induced diarrhea: ท้องเสียเฉียบพลันใช้ Atropine ท้องเสียระยะหน่วงใช้ Loperamide  \n​Vesicant Extravasation Antidotes: * Mechlorethamine / Cisplatin จับคู่กับ Sodium thiosulfate  \n​Taxanes (Docetaxel, Paclitaxel) / Vinca alkaloids จับคู่กับ Hyaluronidase  \n​Anthracyclines / Mitomycin จับคู่กับ DMSO (ทาเฉพาะที่)  \n​2. ผลข้างเคียงเด่นเฉพาะกลุ่มยา (Classic Specific Toxicities)\n​EGFR inhibitors: อาการเด่นคือผื่นคล้ายสิว Acneiform Rash (Papulopustular eruption)  \n​VEGF inhibitors: มักทำให้เกิดความดันโลหิตสูง (Hypertension)  \n​L-asparaginase: มักทำให้ระดับน้ำตาลในเลือดสูง (Hyperglycemia)  \n​Anthracyclines: ผลข้างเคียงร้ายแรงคือภาวะหัวใจล้มเหลว/การทำงานของหัวใจห้องล่างซ้ายผิดปกติ (Left Ventricular Dysfunction)  \n​3. กลไกการจัดการคลื่นไส้อาเจียน (CINV Pathways & Antiemetics)\n​Acute CINV (เฉียบพลัน): เกิดที่ทางเดินอาหาร (Peripheral) เกี่ยวข้องกับ Serotonin แนะนำยา 5HT3 antagonists (เช่น Ondansetron)  \n​Delayed CINV (หน่วง): เกิดที่สมอง (Central) เกี่ยวข้องกับ Substance P แนะนำยา NK1 receptor antagonists (เช่น Aprepitant)  \n​4. ภาวะฉุกเฉินและระบบเลือด (Oncologic Emergencies & Blood)\n​Tumor Lysis Syndrome (TLS): * Allopurinol: ยับยั้งเอนไซม์ Xanthine oxidase (ลดการสร้างกรดยูริก)  \n​Rasburicase: เปลี่ยนกรดยูริกเป็น Allantoin ที่ละลายน้ำได้ดีกว่า (ใช้ในรายที่มีความเสี่ยงสูงหรือมียูริกสูงแล้ว)  \n​Neutropenia: การทำงานของ G-CSF (Filgrastim) เพื่อกระตุ้นการสร้างเม็ดเลือดขาวชนิดนิวโทรฟิล  \n​ใช้ Keyword 4 กลุ่มนี้ รับรองว่าครอบคลุมจุดหลอกและจุดสำคัญในข้อสอบเภสัชวิทยาแน่นอนครับ!]",
+    "directives": [],
+    "parallel_tasks": []
+  },
+  "_pending_branch": {
+    "branch": "U",
+    "directives": []
+  },
+  "_pending_plan": null
+}
