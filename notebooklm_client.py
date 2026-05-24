@@ -1,9 +1,19 @@
-import asyncio
+"""
+notebooklm_client.py — Drop-in replacement for the old NotebookLM browser client.
+Same public interface as before; queries ChromaDB (knowledge_rag) instead of NotebookLM.
+
+Public API (unchanged — session.py imports these):
+  query_notebook(specialty, question) -> str
+  query_from_source_plan(source_plan) -> str
+"""
+
 import json
 import os
-from typing import Dict, List, Any, Union
-from notebooklm import NotebookLMClient
+from typing import Dict
+
 from schemas import SourcePlan
+import knowledge_rag as rag
+
 
 def load_notebooks() -> Dict[str, str]:
     path = os.path.join(os.path.dirname(__file__), "notebooks.json")
@@ -12,63 +22,67 @@ def load_notebooks() -> Dict[str, str]:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 NOTEBOOKS: Dict[str, str] = load_notebooks()
 
+# Map old NotebookLM notebook keys → ChromaDB collection names
+# ChromaDB collections are named from the chunk's Specialty metadata field (lowercased).
+# Old notebooks.json grouped "General_Practice" content under "symptom_approach" notebook.
+_SPECIALTY_ALIASES: Dict[str, str] = {
+    "symptom_approach":  "general_practice",   # old NLM notebook → new collection
+    "general":           "general_practice",
+    "internal_medicine": "general_practice",
+    "endocrine":         "endocrine",
+    "nephrology":        "nephrology",
+    "renal":             "nephrology",
+    "cardiology":        "cardiology",
+    "pulmonology":       "pulmonology",
+    "infectious_disease": "infectious_disease",
+    "id":                "infectious_disease",
+    "pharmacology":      "pharmacology",
+}
 
-# ─────────────────────────────────────────
-# Core async functions
-# ─────────────────────────────────────────
-async def _query_async(notebook_id: str, question: str) -> str:
-    async with await NotebookLMClient.from_storage() as client:
-        response = await client.chat.ask(notebook_id, question)
-        return response.answer if hasattr(response, "answer") else str(response)
 
-
-async def _query_plan_async(source_plan: SourcePlan) -> str:
-    results: List[str] = []
-    async with await NotebookLMClient.from_storage() as client:
-        for target in source_plan.notebook_targets:
-            specialty  = target.notebook
-            keywords   = target.keywords
-            priority   = target.priority
-            notebook_id = NOTEBOOKS.get(specialty)
-
-            if not notebook_id:
-                results.append(f"[KB: notebook '{specialty}' not found in notebooks.json]")
-                continue
-
-            for keyword in keywords:
-                try:
-                    resp = await client.chat.ask(notebook_id, keyword)
-                    answer = resp.answer if hasattr(resp, "answer") else str(resp)
-                    results.append(
-                        f"[Source: {specialty} | Query: {keyword} | Priority: {priority}]\n{answer}"
-                    )
-                except Exception as e:
-                    results.append(f"[KB error — {specialty}/{keyword}: {e}]")
-
-    return "\n\n---\n\n".join(results) if results else "[KB: no results found]"
+def _resolve_specialty(specialty: str) -> str:
+    """Map notebook key / old specialty name → ChromaDB collection name."""
+    return _SPECIALTY_ALIASES.get(specialty, specialty)
 
 
 # ─────────────────────────────────────────
-# Sync wrappers (ใช้ใน session.py ได้เลย)
+# Public sync functions (same interface as before)
 # ─────────────────────────────────────────
+
 def query_notebook(specialty: str, question: str) -> str:
-    """Query notebook เดียวตาม specialty — sync"""
-    notebook_id = NOTEBOOKS.get(specialty)
-    if not notebook_id:
-        return f"[KB: notebook '{specialty}' not found]"
+    """
+    Query a single specialty collection — sync.
+    Replaces the old NotebookLM API call.
+    """
+    resolved = _resolve_specialty(specialty)
     try:
-        return asyncio.run(_query_async(notebook_id, question))
+        result = rag.query(resolved, question, n_results=5)
+        return result
     except Exception as e:
         return f"[KB error: {e}]"
 
 
 def query_from_source_plan(source_plan: SourcePlan) -> str:
-    """Query ทุก target ใน source_plan — sync wrapper สำหรับ session.py"""
+    """
+    Query all targets in a SourcePlan — sync wrapper for session.py.
+    Replaces the old async NotebookLM multi-target query.
+    """
     if not source_plan.notebook_targets:
         return "[KB: no targets in source plan]"
+
+    targets = [
+        {
+            "notebook": _resolve_specialty(t.notebook),
+            "keywords": t.keywords,
+            "priority": t.priority,
+        }
+        for t in source_plan.notebook_targets
+    ]
+
     try:
-        return asyncio.run(_query_plan_async(source_plan))
+        return rag.query_multi(targets)
     except Exception as e:
         return f"[KB error: {e}]"

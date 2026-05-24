@@ -14,6 +14,14 @@ from schemas import (
     parse_llm_json
 )
 
+try:
+    from context_enricher import enrich as _kg_vault_enrich, get_kg_drug_flags as _kg_drug_flags
+    _ENRICHER_AVAILABLE = True
+except ImportError:
+    _ENRICHER_AVAILABLE = False
+    def _kg_vault_enrich(text: str) -> str: return ""
+    def _kg_drug_flags(text: str) -> str: return ""
+
 AVAILABLE_AGENTS = [
     "kb_retrieval",
     "researcher",
@@ -365,6 +373,10 @@ Instruction: {routing['instruction']}
     # ─────────────────────────────────────────
     def approve(self) -> str:
         os.makedirs("reports", exist_ok=True)
+        
+        # Obsidian Vault Path
+        vault_inbox = r"C:\Users\USER\Obsidian vault\00 - Inbox"
+        os.makedirs(vault_inbox, exist_ok=True)
 
         prefix_map = {
             "A": "case", "B": "query",
@@ -373,15 +385,63 @@ Instruction: {routing['instruction']}
             "G": "admission", "U": "freestyle"
         }
         prefix = prefix_map.get(self.branch, "case")
-        filename = f"reports/{prefix}_{self.created_at}_v{self.version}.md"
+        
+        # ให้ AI คิดชื่อไฟล์จากเนื้อหา
+        try:
+            print("🧠 Generating smart filename...")
+            title_prompt = f"Extract a concise filename (max 4 words) for this medical report. Use PascalCase or underscores. DO NOT include extensions like .md. DO NOT use spaces or special characters. Focus on the main diagnosis or chief complaint.\n\nReport:\n{self.draft[:1500]}"
+            generated_title = call_agent(
+                "formatter", 
+                system="You are a strict filename generator. Output ONLY the raw filename text, nothing else.",
+                prompt=title_prompt
+            ).strip()
+            
+            # Clean up title (remove spaces, special chars, keep Thai/English/Underscores)
+            generated_title = re.sub(r'[^\w\s-]', '', generated_title).strip().replace(' ', '_')
+            
+            if not generated_title or len(generated_title) > 50:
+                generated_title = prefix
+        except Exception as e:
+            print(f"[DEBUG] Filename generation failed: {e}")
+            generated_title = prefix
+            
+        # ตั้งชื่อไฟล์: [AI_Name]_[Date]_v[Version].md
+        base_filename = f"{generated_title}_{self.created_at}_v{self.version}.md"
+        local_filename = os.path.join("reports", base_filename)
+        obsidian_filename = os.path.join(vault_inbox, base_filename)
 
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(self.draft)
-            if self.qa_review:
-                f.write("\n\n---\n\n## QA Review\n\n")
-                f.write(self.qa_review)
+        content = self.draft
+        if self.qa_review:
+            content += "\n\n---\n\n## QA Review\n\n" + self.qa_review
 
-        return filename
+        # Save ลง Local (CaseFlow folder)
+        with open(local_filename, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+        # Save ลง Obsidian Vault (Inbox folder)
+        try:
+            with open(obsidian_filename, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"✅ Saved to Obsidian Vault: 00 - Inbox/{base_filename}")
+            
+            # บันทึก Log ลงใน Timeline Hub.md อัตโนมัติ
+            timeline_file = os.path.join(r"C:\Users\USER\Obsidian vault", "Timeline Hub.md")
+            log_entry = f"- [[{datetime.now().strftime('%Y-%m-%d')}]] : สร้างไฟล์ [[{base_filename.replace('.md', '')}]] สำเร็จ (Branch: {prefix})\n"
+            
+            # เช็คว่ามีไฟล์ Timeline Hub หรือยัง ถ้าไม่มีให้สร้างพร้อม Header
+            if not os.path.exists(timeline_file):
+                with open(timeline_file, "w", encoding="utf-8") as f:
+                    f.write("# ⏳ Note Timeline Hub\n\n*บันทึกการสร้างไฟล์อัตโนมัติจาก CaseFlow*\n\n---\n\n")
+            
+            # Append log
+            with open(timeline_file, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+            print("📝 Updated Timeline Hub.md")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to save to Obsidian Vault: {e}")
+
+        return local_filename
 
     # ─────────────────────────────────────────
     # BRANCH U: Execute plan after user confirm
@@ -515,7 +575,7 @@ Instruction: {routing['instruction']}
             return {"mode": "full", "branch": "A", "patient_data": raw_input, "directives": [], "parallel_tasks": []}
 
     def _get_kb_sources(self, pi_checked: str) -> str:
-        """Helper: Source Finder -> NotebookLM -> Researcher fallback"""
+        """Helper: Source Finder -> RAG/researcher fallback + KG + Vault enrichment"""
         source_plan_raw = call_agent(
             "source_finder",
             system=load_prompt("source_finder"),
@@ -540,6 +600,13 @@ Instruction: {routing['instruction']}
                 system=load_prompt("researcher"),
                 prompt=f"Context: {pi_checked}\n\nKB Status: {source}"
             )
+
+        # Enrich with PrimeKG facts + Obsidian vault context
+        enrichment = _kg_vault_enrich(pi_checked)
+        if enrichment:
+            print("[enricher] KG + Vault context injected")
+            source = source + enrichment
+
         return source
 
     def _run_pipeline(self, patient_data: str, directives: List[Directive]) -> str:
@@ -584,7 +651,8 @@ Instruction: {routing['instruction']}
                 "analyzer",
                 prompt=f"PI: {pi_checked}\nSources: {source}{parallel_results}{get_extras('analyzer', True)}"
             )
-            challenge = call_agent("challenger", prompt=f"Analysis: {analysis}\nSources: {source}{get_extras('challenger')}")
+            kg_flags = _kg_drug_flags(pi_checked)
+            challenge = call_agent("challenger", prompt=f"Analysis: {analysis}\nSources: {source}{kg_flags}{get_extras('challenger')}")
             synthesis = call_agent("reasoning_gate", prompt=f"A: {analysis}\nC: {challenge}")
             if synthesis.startswith("[ERROR"):
                 print("[DEBUG] reasoning_gate failed, falling back to analyzer output")
@@ -610,7 +678,8 @@ Instruction: {routing['instruction']}
             drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nProgress note draft: {report}\nReview all medications: current drugs, dosages, renal/hepatic adjustments needed, monitoring parameters.")
             score_result = call_agent("score_agent", prompt=f"Patient: {patient_data}\nProgress note: {report}\nCalculate relevant clinical scores for severity monitoring and treatment decisions.")
             analysis = call_agent("analyzer", prompt=f"Draft: {report}\nSources: {source}\nDrug review: {drug_info}\nClinical scores: {score_result}{get_extras('analyzer')}")
-            challenge = call_agent("challenger", prompt=f"Draft: {report}\nAnalysis: {analysis}\nSources: {source}{get_extras('challenger')}")
+            kg_flags = _kg_drug_flags(pi_checked)
+            challenge = call_agent("challenger", prompt=f"Draft: {report}\nAnalysis: {analysis}\nSources: {source}{kg_flags}{get_extras('challenger')}")
 
             self._pipeline_context = {"source": source, "drug_info": drug_info, "score_result": score_result}
             return call_agent(

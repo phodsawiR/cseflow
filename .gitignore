@@ -3,3 +3,22 @@ __pycache__/
 *.pdf
 .env
 temp_ingest/
+
+# ChromaDB vector store (large binary data, rebuild via ingest)
+knowledge_base/
+
+# Large data files
+clinical_kg.csv
+kg.csv
+
+# User session data
+sessions/
+
+# Generated reports
+reports/
+
+# Obsidian personal vault
+obsidian/
+
+# Google service account credentials
+google-service-account.json

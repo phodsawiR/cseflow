@@ -8,7 +8,8 @@ Steps:
   3. Detect document type + metadata (Gemini)
   4. Split by structure (TOC / header level)
   5. Save chunks to knowledge_base/[Specialty]/[Type]/
-  6. Upload chunks to correct NotebookLM notebook
+  6a. Index chunks into ChromaDB (local RAG — always runs)
+  6b. Upload chunks to Google Drive via service account (optional backup)
 """
 
 import argparse
@@ -39,11 +40,17 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from notebooklm import NotebookLMClient
-    NLM_AVAILABLE = True
+    import knowledge_rag as _rag
+    RAG_AVAILABLE = True
 except ImportError:
-    NLM_AVAILABLE = False
-    print("⚠️  notebooklm library not found — upload will be skipped.")
+    RAG_AVAILABLE = False
+    print("⚠️  knowledge_rag / chromadb not found — RAG indexing will be skipped.")
+
+try:
+    from knowledge_pipeline.gdrive_upload import upload_files as _gdrive_upload, is_configured as _gdrive_configured
+    GDRIVE_AVAILABLE = True
+except ImportError:
+    GDRIVE_AVAILABLE = False
 
 load_dotenv()
 
@@ -71,8 +78,7 @@ SPLIT_LEVEL = {
 # Minimum characters for a chunk to be kept (filters TOC stubs)
 MIN_CHUNK_CHARS = 1_500
 
-# Maximum characters for any chunk (applies to all types)
-# ~20,000 words — well under NotebookLM's limit but focused enough for retrieval
+# Maximum characters for any chunk — focused for retrieval quality
 MAX_CHUNK_CHARS = 100_000
 
 # Specialty → notebook key normalization
@@ -180,18 +186,50 @@ def _sub_split_recursive(
     return chunks
 
 
+_PLAIN_CHUNK_SIZE    = 6_000   # chars per plain-text chunk
+_PLAIN_CHUNK_OVERLAP = 400    # overlap between consecutive plain-text chunks
+
+
+def _split_plain_text(content: str, source_title: str = "Document") -> list[Chunk]:
+    """
+    Fallback chunker for plain text with no markdown headers.
+    Splits on paragraph boundaries, targeting ~_PLAIN_CHUNK_SIZE chars each.
+    """
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", content) if p.strip()]
+    chunks: list[Chunk] = []
+    buf, buf_len, idx = [], 0, 0
+
+    for para in paragraphs:
+        buf.append(para)
+        buf_len += len(para)
+        if buf_len >= _PLAIN_CHUNK_SIZE:
+            body = "\n\n".join(buf)
+            chunks.append(Chunk(title=f"{source_title} — part {idx+1}", content=body, index=idx))
+            # keep last paragraph as overlap context
+            buf = buf[-1:] if _PLAIN_CHUNK_OVERLAP else []
+            buf_len = len(buf[0]) if buf else 0
+            idx += 1
+
+    if buf:  # flush remainder
+        body = "\n\n".join(buf)
+        if len(body) >= MIN_CHUNK_CHARS or not chunks:
+            chunks.append(Chunk(title=f"{source_title} — part {idx+1}", content=body, index=idx))
+
+    return chunks or [Chunk(title=source_title, content=content[:MAX_CHUNK_CHARS], index=0)]
+
+
 def split_by_headers(content: str, level: int, doc_type: str = "") -> list[Chunk]:
     """
-    Split markdown at H{level} boundaries. 
-    Any chunk exceeding MAX_CHUNK_CHARS is recursively sub-split (H+1)
-    to ensure manageable sizes for NotebookLM while preserving context.
+    Split markdown at H{level} boundaries.
+    Falls back to paragraph-based chunking if no markdown headers are found.
     """
     slices = _slice_at_level(content, level)
 
     if not slices:
         if level < 3:
             return split_by_headers(content, level + 1, doc_type)
-        return [Chunk(title="Full Document", content=content, index=0)]
+        # No headers at any level → plain-text fallback
+        return _split_plain_text(content)
 
     chunks: list[Chunk] = []
     idx = 0
@@ -308,7 +346,7 @@ class KnowledgeIngestor:
     # ── Gemini helper ─────────────────────────────────────────────────────────
     def _ask_gemini(self, prompt: str) -> str:
         resp = self.genai.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
         return resp.text.strip()
@@ -621,99 +659,54 @@ CONTENT:
         self._report_progress("บันทึกข้อมูลสำเร็จ", "done", f"{len(saved)} files")
         return saved
 
-    # ── Step 6: Upload to NotebookLM ─────────────────────────────────────────
-    async def _ensure_notebook(self, client, specialty: str, auto_create: bool) -> Optional[str]:
-        """Resolve a notebook_id for `specialty`. Prompt-then-create when missing."""
-        notebook_id = self.notebooks.get(specialty)
-        if notebook_id and notebook_id != "NOTEBOOK_ID_HERE":
-            return notebook_id
-
-        title = specialty.replace("_", " ").title()
-        self._report_progress(f"ไม่พบ Notebook สำหรับ '{specialty}'", "running")
-
-        if not auto_create:
-            if self.async_input_callback:
-                ans = await self.async_input_callback(f"สร้าง notebook ใหม่ชื่อ '{title}'? [y/N]: ")
-            else:
-                try:
-                    ans = await asyncio.to_thread(
-                        input, f"   สร้าง notebook ใหม่ชื่อ '{title}'? [y/N]: "
-                    )
-                except EOFError:
-                    ans = ""
-            if ans.strip().lower() not in {"y", "yes", "ใช่"}:
-                self._report_progress(f"ข้ามการ Upload (ผู้ใช้ปฏิเสธสร้าง notebook)", "done")
-                return None
-
+    # ── Step 6: Index into ChromaDB + upload to Google Drive ─────────────────
+    def _index_in_rag(self, files: list[Path], metadata: dict) -> int:
+        """Index chunks into local ChromaDB. Returns count indexed."""
+        if not RAG_AVAILABLE:
+            self._report_progress("ข้ามการ index RAG (chromadb ไม่ได้ติดตั้ง)", "done")
+            return 0
+        self._report_progress("กำลัง index เข้า ChromaDB (RAG)", "running")
         try:
-            nb = await client.notebooks.create(title=title)
-            new_id = nb.id
+            count = _rag.index_files(files, metadata)
+            self._report_progress("ChromaDB index สำเร็จ", "done", f"{count} chunks")
+            return count
         except Exception as e:
-            self._report_progress("สร้าง Notebook ล้มเหลว", "error", str(e))
-            return None
+            self._report_progress("ChromaDB index ล้มเหลว", "error", str(e)[:80])
+            return 0
 
-        self.notebooks[specialty] = new_id
-        save_json(NOTEBOOKS_FILE, self.notebooks)
-        self._report_progress(f"สร้าง notebook '{title}' สำเร็จ", "done", f"id={new_id}")
-        return new_id
+    async def upload_to_gdrive_and_index(
+        self, files: list[Path], metadata: dict, auto_create: bool = False
+    ):
+        """Step 6: index into RAG (always) + upload to GDrive (if configured)."""
+        # 6a: ChromaDB indexing — always, runs in thread pool
+        await asyncio.to_thread(self._index_in_rag, files, metadata)
 
-    async def upload_to_notebooklm(self, files: list[Path], metadata: dict, auto_create: bool = False):
-        if not NLM_AVAILABLE:
-            self._report_progress("ข้ามการ Upload (ไม่ได้ติดตั้ง library)", "done")
+        # 6b: Google Drive backup — only if service account is configured
+        if not GDRIVE_AVAILABLE:
+            return
+
+        if not _gdrive_configured():
+            self._report_progress(
+                "Google Drive backup ข้าม (ไม่มี service account)",
+                "done",
+                "ดู GEMINI.md สำหรับวิธีตั้งค่า",
+            )
             return
 
         specialty = normalize_specialty(str(metadata.get("Specialty", "unknown")))
+        doc_type  = str(metadata.get("Type", "Textbook"))
 
-        try:
-            client_cm = await NotebookLMClient.from_storage()
-        except Exception as e:
-            self._report_progress("NotebookLM Upload ล้มเหลว (Auth Error)", "error", str(e))
-            return
-
-        async with client_cm as client:
-            notebook_id = await self._ensure_notebook(client, specialty, auto_create)
-            if not notebook_id:
-                return
-
-            doc_title = str(metadata.get("Title", metadata.get("source_document", "Document")))
-            upload_label = f"อัพโหลดไปยัง NotebookLM [{specialty}]"
-            total = len(files)
-            self._report_progress(
-                upload_label, "running", f"0/{total}",
-                percent=0, current=0, total=total,
+        def _do_upload():
+            return _gdrive_upload(
+                files, specialty, doc_type,
+                progress_callback=self._report_progress,
             )
 
-            ok = fail = 0
-            for fpath in files:
-                try:
-                    content = fpath.read_text(encoding="utf-8")
-                    if content.startswith("---"):
-                        end = content.find("---", 3)
-                        content = content[end + 3:].strip() if end != -1 else content
-
-                    chunk_label = fpath.stem.replace("__", " — ").replace("_", " ")
-                    source_title = f"{doc_title} — {chunk_label}"[:200]
-
-                    await client.sources.add_text(
-                        notebook_id,
-                        title=source_title,
-                        content=content,
-                        wait=True,
-                        wait_timeout=300.0,
-                    )
-                    ok += 1
-                    pct = int(ok * 100 / total)
-                    self._report_progress(
-                        upload_label, "running", f"{ok}/{total}",
-                        percent=pct, current=ok, total=total,
-                    )
-                    await asyncio.sleep(2)
-                except Exception:
-                    fail += 1
-
+        uploaded = await asyncio.to_thread(_do_upload)
+        if uploaded:
             self._report_progress(
-                upload_label, "done", f"{ok} success, {fail} fail",
-                percent=100, current=ok, total=total,
+                f"Google Drive backup สำเร็จ", "done",
+                f"{len(uploaded)} files อัพโหลดแล้ว",
             )
 
     # ── Index ─────────────────────────────────────────────────────────────────
@@ -783,9 +776,12 @@ async def ingest_one(
         )
 
         if not no_upload:
-            await ingestor.upload_to_notebooklm(
+            await ingestor.upload_to_gdrive_and_index(
                 saved_files, metadata, auto_create=auto_create
             )
+        else:
+            # --no-upload: still index locally for RAG queries
+            await asyncio.to_thread(ingestor._index_in_rag, saved_files, metadata)
 
         ingestor.update_index(source_name, saved_files, metadata)
         return {
@@ -883,11 +879,11 @@ Examples:
     parser.add_argument("--force",       action="store_true",
                         help="Re-ingest even if file already exists in index")
     parser.add_argument("--no-upload",   action="store_true",
-                        help="Save files locally only, skip NotebookLM upload")
+                        help="ข้ามการอัพโหลด Google Drive (แต่ยังคง index เข้า ChromaDB ตามปกติ)")
     parser.add_argument("--fast",        action="store_true",
                         help="Skip high-accuracy AI conversion, use lightweight pdftext mode")
     parser.add_argument("--auto-create", action="store_true",
-                        help="สร้าง notebook ใหม่อัตโนมัติเมื่อไม่เจอ specialty ใน notebooks.json")
+                        help="(legacy) เก็บไว้เพื่อ backward compat")
     args = parser.parse_args()
 
     # ── Build spec list ──────────────────────────────────────────────────────

@@ -98,7 +98,7 @@ def _call_claude_with_retry(agent_name: str, prompt: str, system: str) -> str:
     )
     return response.content[0].text
 
-_GROUNDING_MODEL = "gemini-3-flash-preview"
+_GROUNDING_MODEL = "gemini-3.5-flash"
 
 def _call_gemini_researcher(prompt: str, system: str, model_name: str) -> str:
     """Researcher: ลอง grounding 1 ครั้ง ถ้าล้มใช้ no-grounding พร้อม retry"""
@@ -113,10 +113,10 @@ def _call_gemini_researcher(prompt: str, system: str, model_name: str) -> str:
                 contents=content,
                 config=types.GenerateContentConfig(
                     tools=[types.Tool(google_search=types.GoogleSearch())],
-                    temperature=0.2,
+                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 ),
             )
-            response = future.result(timeout=30)
+            response = future.result(timeout=60)
         return response.text
     except Exception as grounding_err:
         print(f"[DEBUG] Grounding failed ({grounding_err!r}), falling back to no-grounding...")
@@ -124,14 +124,20 @@ def _call_gemini_researcher(prompt: str, system: str, model_name: str) -> str:
     return _call_gemini_no_grounding_with_retry(prompt, system, model_name)
 
 
-_FALLBACK_MODEL = "gemini-2.5-pro"
+_FALLBACK_MODEL = "gemini-3.5-flash"
 
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=4, max=10))
 def _call_gemini_no_grounding_with_retry(prompt: str, system: str, model_name: str) -> str:
     content = f"{system}\n\n{prompt}" if system else prompt
-    fallback = _FALLBACK_MODEL if model_name == "gemini-2.5-pro" else model_name
+    fallback = _FALLBACK_MODEL if model_name in ["gemini-2.5-pro", "gemini-3.1-pro"] else model_name
     print(f"[router] researcher (no-grounding fallback) ({fallback}): Requesting...")
-    response = gemini_client.models.generate_content(model=fallback, contents=content)
+    response = gemini_client.models.generate_content(
+        model=fallback, 
+        contents=content,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level="medium")
+        )
+    )
     return response.text
 
 
@@ -139,7 +145,17 @@ def _call_gemini_no_grounding_with_retry(prompt: str, system: str, model_name: s
 def _call_gemini_with_retry(agent_name: str, prompt: str, system: str, model_name: str) -> str:
     print(f"[router] {agent_name} ({model_name}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    response = gemini_client.models.generate_content(model=model_name, contents=content)
+    
+    # สำหรับ Gemini 3.5 Flash เราจะใช้ Thinking Level ตามความยากของงาน
+    level = "high" if agent_name in ["source_finder", "interpreter", "symptom_mapper", "kb_retrieval"] else "medium"
+    
+    response = gemini_client.models.generate_content(
+        model=model_name, 
+        contents=content,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=level)
+        )
+    )
     return response.text
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -161,12 +177,12 @@ def call_agent(agent_name: str, prompt: str, system: str = "") -> str:
         if model == "claude":
             result = _call_claude_with_retry(agent_name, prompt, system)
         elif model == "gemini":
-            result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-2.5-pro")
+            result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-3.5-flash")
         elif model == "gemini-pro":
             if agent_name == "researcher":
-                result = _call_gemini_researcher(prompt, system, "gemini-2.5-pro")
+                result = _call_gemini_researcher(prompt, system, "gemini-3.5-flash")
             else:
-                result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-2.5-pro")
+                result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-3.5-flash")
         elif model == "ollama":
             try:
                 result = _call_ollama_with_retry(agent_name, prompt, system)

@@ -1,0 +1,112 @@
+obsidian\CLAUDE.md
+obsidian\MOC.md
+obsidian\Timeline Hub.md
+obsidian\🏠 Ward Medicine Home.md
+obsidian\00 - Inbox\Thiazolidinediones_Summary_20260522_1159_v0.md
+obsidian\02 - Diseases\lung_examination.md
+obsidian\02 - Diseases\Cardiology\ACS.md
+obsidian\02 - Diseases\Cardiology\Atrial_Fibrillation.md
+obsidian\02 - Diseases\Cardiology\Heart_Failure.md
+obsidian\02 - Diseases\Cardiology\Hypertensive_Crisis.md
+obsidian\02 - Diseases\Cardiology\Infective_Endocarditis.md
+obsidian\02 - Diseases\Endocrinology\DKA.md
+obsidian\02 - Diseases\Endocrinology\HHS.md
+obsidian\02 - Diseases\Endocrinology\Hypothyroidism.md
+obsidian\02 - Diseases\Endocrinology\Thyroid_Storm.md
+obsidian\02 - Diseases\Gastroenterology\Acute_Pancreatitis.md
+obsidian\02 - Diseases\Gastroenterology\Cirrhosis.md
+obsidian\02 - Diseases\Gastroenterology\Upper_GI_Bleeding.md
+obsidian\02 - Diseases\General\Pain_Management.md
+obsidian\02 - Diseases\General\Pre-operative_Evaluation.md
+obsidian\02 - Diseases\Hematology\Approach_to_Anemia.md
+obsidian\02 - Diseases\Hematology\Transfusion_Reaction.md
+obsidian\02 - Diseases\Infectious_Disease\Cellulitis.md
+obsidian\02 - Diseases\Infectious_Disease\Febrile_Neutropenia.md
+obsidian\02 - Diseases\Infectious_Disease\Sepsis.md
+obsidian\02 - Diseases\Infectious_Disease\UTI.md
+obsidian\02 - Diseases\Nephrology\Acute_Kidney_Injury.md
+obsidian\02 - Diseases\Nephrology\Chronic_Kidney_Disease.md
+obsidian\02 - Diseases\Nephrology\Hyperkalemia.md
+obsidian\02 - Diseases\Nephrology\Hyponatremia.md
+obsidian\02 - Diseases\Nephrology\Indications_for_Dialysis.md
+obsidian\02 - Diseases\Nephrology\Urinalysis_Interpretation.md
+obsidian\02 - Diseases\Neurology\Acute_Ischemic_Stroke.md
+obsidian\02 - Diseases\Neurology\Delirium_vs_Dementia.md
+obsidian\02 - Diseases\Neurology\Meningitis.md
+obsidian\02 - Diseases\Neurology\Status_Epilepticus.md
+obsidian\02 - Diseases\Pulmonology\AECOPD.md
+obsidian\02 - Diseases\Pulmonology\Asthma.md
+obsidian\02 - Diseases\Pulmonology\Community_Acquired_Pneumonia.md
+obsidian\02 - Diseases\Pulmonology\Pleural_Effusion.md
+obsidian\02 - Diseases\Pulmonology\Pneumothorax.md
+obsidian\02 - Diseases\Pulmonology\Pulmonary_Embolism.md
+obsidian\03 - Drugs\Antibiotics\Azithromycin.md
+obsidian\03 - Drugs\Antibiotics\Ceftriaxone.md
+obsidian\03 - Drugs\Antibiotics\Levofloxacin.md
+obsidian\03 - Drugs\Antibiotics\Meropenem.md
+obsidian\03 - Drugs\Antibiotics\Piperacillin-Tazobactam.md
+obsidian\03 - Drugs\Antibiotics\Vancomycin.md
+obsidian\03 - Drugs\Anticoagulants\Enoxaparin.md
+obsidian\03 - Drugs\Anticoagulants\Heparin.md
+obsidian\03 - Drugs\Anticoagulants\Warfarin.md
+obsidian\03 - Drugs\Cardiovascular\Adenosine.md
+obsidian\03 - Drugs\Cardiovascular\Adrenaline.md
+obsidian\03 - Drugs\Cardiovascular\Amiodarone.md
+obsidian\03 - Drugs\Cardiovascular\Nicardipine.md
+obsidian\03 - Drugs\Cardiovascular\Norepinephrine.md
+obsidian\03 - Drugs\Diuretics\Furosemide.md
+obsidian\03 - Drugs\Endocrine\Insulin_Drip.md
+obsidian\03 - Drugs\Gastrointestinal\Octreotide.md
+obsidian\03 - Drugs\Gastrointestinal\Omeprazole.md
+obsidian\03 - Drugs\Neurology\Diazepam.md
+obsidian\03 - Drugs\Neurology\Lorazepam.md
+obsidian\03 - Drugs\Neurology\Phenytoin.md
+obsidian\03 - Drugs\Respiratory\Dexamethasone.md
+obsidian\03 - Drugs\Respiratory\Hydrocortisone.md
+obsidian\03 - Drugs\Respiratory\Salbutamol.md
+obsidian\03 - Drugs\Specific_Treatments\Calcium_Gluconate.md
+obsidian\03 - Drugs\Specific_Treatments\N-acetylcysteine.md
+obsidian\03 - Drugs\Thrombolytics\Alteplase.md
+obsidian\04 - Labs\ABG_Interpretation.md
+obsidian\04 - Labs\CBC_Pattern.md
+obsidian\04 - Labs\Coagulation_Profile.md
+obsidian\04 - Labs\LFT_Pattern.md
+obsidian\07 - Procedures\Arterial_Blood_Gas.md
+obsidian\07 - Procedures\Lumbar_Puncture.md
+obsidian\07 - Procedures\NG_Tube_Insertion.md
+obsidian\07 - Procedures\Paracentesis.md
+obsidian\07 - Procedures\Thoracentesis.md
+obsidian\08 - Approaches\Altered_Consciousness.md
+obsidian\08 - Approaches\Approach_to_On_Call.md
+obsidian\08 - Approaches\Approach_to_Ward_Call.md
+obsidian\08 - Approaches\Chest_Pain.md
+obsidian\08 - Approaches\Dyspnea.md
+obsidian\08 - Approaches\Fever.md
+obsidian\08 - Approaches\Hyperkalemia_Approach.md
+obsidian\08 - Approaches\Hyponatremia_Approach.md
+obsidian\08 - Approaches\Jaundice.md
+obsidian\08 - Approaches\Leg_Edema.md
+obsidian\08 - Approaches\Upper_GI_Bleed.md
+obsidian\99 - Templates\Procedure Template.md
+obsidian\99 - Templates\Template - Case.md
+obsidian\99 - Templates\Template - Disease.md
+obsidian\99 - Templates\Template - Drug.md
+obsidian\99 - Templates\Template - Film.md
+obsidian\99 - Templates\Template - Freestyle.md
+obsidian\99 - Templates\Template - Guideline.md
+obsidian\99 - Templates\Template - Lab.md
+obsidian\copilot\copilot-custom-prompts\Clip Web Page.md
+obsidian\copilot\copilot-custom-prompts\Clip YouTube Transcript.md
+obsidian\copilot\copilot-custom-prompts\Emojify.md
+obsidian\copilot\copilot-custom-prompts\Explain like I am 5.md
+obsidian\copilot\copilot-custom-prompts\Fix grammar and spelling.md
+obsidian\copilot\copilot-custom-prompts\Generate glossary.md
+obsidian\copilot\copilot-custom-prompts\Generate table of contents.md
+obsidian\copilot\copilot-custom-prompts\Make longer.md
+obsidian\copilot\copilot-custom-prompts\Make shorter.md
+obsidian\copilot\copilot-custom-prompts\Remove URLs.md
+obsidian\copilot\copilot-custom-prompts\Rewrite as tweet thread.md
+obsidian\copilot\copilot-custom-prompts\Rewrite as tweet.md
+obsidian\copilot\copilot-custom-prompts\Simplify.md
+obsidian\copilot\copilot-custom-prompts\Summarize.md
+obsidian\copilot\copilot-custom-prompts\Translate to Chinese.md
