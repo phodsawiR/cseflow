@@ -5,7 +5,12 @@ __pycache__/
 temp_ingest/
 
 # ChromaDB vector store (large binary data, rebuild via ingest)
-knowledge_base/
+/knowledge_base/
+knowledge_pipeline/knowledge_base/
+
+# Bot runtime state
+bot_sessions.json
+ward_topics.json
 
 # Large data files
 clinical_kg.csv

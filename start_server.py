@@ -15,8 +15,30 @@ Usage: python start_server.py
 
 import os
 import re
+import sys
 import subprocess
 import threading
+
+# ── Single-instance guard ─────────────────────────────────────────────────────
+_PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".start_server.pid")
+
+def _check_single_instance():
+    if os.path.exists(_PID_FILE):
+        try:
+            old_pid = int(open(_PID_FILE).read().strip())
+            import psutil
+            if psutil.pid_exists(old_pid):
+                print(f"[start_server] already running (PID {old_pid}). Exiting.")
+                sys.exit(0)
+        except Exception:
+            pass
+    with open(_PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    import atexit
+    atexit.register(lambda: os.path.exists(_PID_FILE) and os.remove(_PID_FILE))
+
+_check_single_instance()
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Ensure cloudflared is findable on Windows (winget installs to non-default PATH)
 _CF_WIN_PATH = r"C:\Program Files (x86)\cloudflared"

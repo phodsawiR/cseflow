@@ -122,51 +122,103 @@ def _cf_send(chat_id: int, text: str):
                 pass
 
 
+_STEP_ICON = {"done": "✅", "running": "⚙️", "error": "❌", "waiting_input": "⏸️"}
+
+
+def _build_progress_text(steps: list[dict], elapsed: int, done: bool = False) -> str:
+    header = f"{'✅ เสร็จแล้ว' if done else '⏳ กำลังทำงาน'} ({elapsed}s)\n"
+    lines = [header]
+    for s in steps:
+        icon   = _STEP_ICON.get(s.get("status", ""), "•")
+        label  = s.get("label", s.get("agent", "?"))
+        detail = s.get("detail", "")
+        suffix = f" — {detail[:80]}" if detail and s.get("status") in ("error", "done") else ""
+        if s.get("status") == "running":
+            lines.append(f"{icon} {label}...")
+        else:
+            lines.append(f"{icon} {label}{suffix}")
+    # ถ้ายาวเกิน 3800 ให้เก็บแค่ header + N ล่าสุด
+    text = "\n".join(lines)
+    if len(text) > 3800:
+        kept = [header]
+        for line in lines[1:][-25:]:   # 25 steps ล่าสุด
+            kept.append(line)
+        text = "\n".join(kept)
+    return text
+
+
 def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
-    """Background thread: poll /result until processing: False, then send draft."""
+    """Background thread: poll /result + /progress, update live step log, deliver draft."""
     info = cf_state.get(user_id)
     if not info:
         return
     session_id = info["session_id"]
-    start = time.time()
+    start      = time.time()
+    last_text  = ""
 
     while True:
-        time.sleep(6)
+        time.sleep(4)
+
+        # ── ดึง result ─────────────────────────────────────────────────────
         try:
             data = _req.get(f"{CF_API}/result/{session_id}", timeout=15).json()
         except Exception as e:
             try:
-                bot.edit_message_text(f"❌ ติดต่อ CaseFlow ไม่ได้: {e}", chat_id, progress_msg_id)
+                bot.edit_message_text(
+                    f"❌ ติดต่อ CaseFlow ไม่ได้\n`{str(e)[:200]}`",
+                    chat_id, progress_msg_id, parse_mode="Markdown",
+                )
             except Exception:
                 pass
             cf_state.pop(user_id, None)
             return
 
-        elapsed = int(time.time() - start)
-
-        if data.get("processing"):
-            try:
-                prog = _req.get(f"{CF_API}/progress/{session_id}", timeout=5).json()
-                running_label = next(
-                    (s["label"] for s in reversed(prog.get("steps", []))
-                     if s.get("status") == "running"), None
-                )
-                msg = f"⏳ CaseFlow กำลังทำงาน ({elapsed}s)"
-                if running_label:
-                    msg += f"\n└ {running_label}..."
-                bot.edit_message_text(msg, chat_id, progress_msg_id)
-            except Exception:
-                pass
-            continue
-
-        # ── Done ─────────────────────────────────────────────────────────────
+        # ── ดึง progress steps ─────────────────────────────────────────────
+        steps: list[dict] = []
         try:
-            bot.delete_message(chat_id, progress_msg_id)
+            prog  = _req.get(f"{CF_API}/progress/{session_id}", timeout=5).json()
+            steps = prog.get("steps", [])
         except Exception:
             pass
 
+        elapsed   = int(time.time() - start)
+        still_run = data.get("processing", False)
+        new_text  = _build_progress_text(steps, elapsed, done=not still_run)
+
+        # อัปเดต message เฉพาะเมื่อข้อความเปลี่ยน
+        if new_text != last_text:
+            try:
+                bot.edit_message_text(new_text, chat_id, progress_msg_id)
+                last_text = new_text
+            except Exception:
+                pass
+
+        if still_run:
+            continue
+
+        # ── Pipeline เสร็จแล้ว ─────────────────────────────────────────────
+        # ถ้ามี error steps → ส่ง error detail เป็น message แยก
+        err_steps = [s for s in steps if s.get("status") == "error"]
+        if err_steps:
+            err_lines = ["⚠️ *พบ error ระหว่าง pipeline:*\n"]
+            for s in err_steps:
+                err_lines.append(f"❌ *{s.get('label', s.get('agent','?'))}*")
+                if s.get("detail"):
+                    err_lines.append(f"`{s['detail'][:300]}`")
+            try:
+                bot.send_message(chat_id, "\n".join(err_lines), parse_mode="Markdown")
+            except Exception:
+                bot.send_message(chat_id, "\n".join(err_lines))
+
         if data.get("error"):
-            _cf_send(chat_id, f"❌ CaseFlow error:\n{data['error']}")
+            try:
+                bot.send_message(
+                    chat_id,
+                    f"❌ *CaseFlow หยุดทำงาน:*\n`{data['error'][:400]}`",
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                bot.send_message(chat_id, f"❌ CaseFlow error:\n{data['error'][:400]}")
             cf_state.pop(user_id, None)
             return
 
