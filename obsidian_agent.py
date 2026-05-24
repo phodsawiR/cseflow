@@ -124,7 +124,19 @@ def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
             bot.send_message(
                 chat_id,
                 f"🤔 *CaseFlow ตรวจจับว่าเป็น {label} (Branch {pb})*\n\n"
-                f"พิมพ์ `ใช่` เพื่อยืนยัน หรืออธิบายเพิ่มเติมเพื่อแก้",
+                f"พิมพ์ `ใช่` เพื่อยืนยัน หรือระบุ branch ที่ต้องการ (A/B/C/D/E/F/G/U)",
+                parse_mode="Markdown",
+            )
+            return
+
+        # Branch U — plan confirmation (second round)
+        if data.get("needs_confirm"):
+            cf_state[user_id]["state"] = "waiting_confirm"
+            plan_text = data.get("draft", "(ไม่มีข้อมูล plan)")
+            _cf_send(chat_id, f"📋 *แผนการทำงาน (Branch U)*\n\n{plan_text}")
+            bot.send_message(
+                chat_id,
+                "พิมพ์ `ยืนยัน` เพื่อรัน หรือบอกสิ่งที่ต้องการเปลี่ยนแปลง",
                 parse_mode="Markdown",
             )
             return
@@ -141,9 +153,15 @@ def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
 
         header = f"📋 *Branch {branch} — {_BRANCH_LABELS.get(branch, '')} v{version}*\n\n"
         _cf_send(chat_id, header + draft)
+
+        # QA review (ถ้ามี)
+        qa = data.get("qa_review", "")
+        if qa:
+            _cf_send(chat_id, f"🔍 *QA Review:*\n\n{qa}")
+
         bot.send_message(
             chat_id,
-            "💬 ส่งข้อความต่อเพื่อแก้ไข | `/cfnew` เพื่อเคสใหม่",
+            "💬 ส่งข้อความต่อเพื่อแก้ไข | `/cfapprove` บันทึกลง vault | `/cfnew` เคสใหม่",
             parse_mode="Markdown",
         )
 
@@ -202,7 +220,10 @@ HELP_TEXT = """\
 `/case <ข้อมูลผู้ป่วย>` — ส่งเคสเข้า CaseFlow
 `/cf <ข้อมูลผู้ป่วย>` — เหมือนกัน (ชื่อสั้น)
 `/cfnew` — เริ่มเคสใหม่ ล้าง session เดิม
+`/cfapprove` — บันทึก report ลง vault
 
+Branches: A=case | B=query | C=symptom | D=progress
+          E=round | F=interpret | G=admission | U=freestyle
 เมื่อมี session active — พิมพ์ต่อเพื่อแก้ไขรายงาน
 
 ━━━ *Bot Commands* ━━━
@@ -437,6 +458,24 @@ def handle_gemini(message):
         cf_state.pop(user_id, None)
         bot.reply_to(message, "🗑️ ล้าง CaseFlow session แล้ว — ส่ง `/case` เพื่อเริ่มเคสใหม่",
                      parse_mode="Markdown")
+        return
+
+    if query.lower() == "/cfapprove":
+        info = cf_state.get(user_id)
+        if not info or info.get("state") != "done":
+            bot.reply_to(message, "⚠️ ไม่มี report ที่พร้อม approve — ต้องมี session ที่เสร็จแล้วก่อน")
+            return
+        try:
+            r = _req.post(f"{CF_API}/approve",
+                          json={"session_id": info["session_id"]}, timeout=30)
+            r.raise_for_status()
+            result = r.json()
+            saved = result.get("saved", "")
+            bot.reply_to(message,
+                         f"✅ บันทึกแล้ว!\n`{saved}`\n\nReport ถูก save ลง `reports/` และ Obsidian Vault inbox",
+                         parse_mode="Markdown")
+        except Exception as e:
+            bot.reply_to(message, f"❌ Approve error: {e}")
         return
 
     # ── CaseFlow follow-up (revision / confirm) ──────────────────────────────
