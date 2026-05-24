@@ -3,9 +3,32 @@ import subprocess
 import time
 import re
 import os
+import sys
 import json
 import threading
+import requests as _req
 from gap_finder import find_missing_topics, format_gap_report
+
+# ── Single-instance guard ─────────────────────────────────────────────────────
+_PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".obsidian_agent.pid")
+
+def _check_single_instance():
+    if os.path.exists(_PID_FILE):
+        try:
+            old_pid = int(open(_PID_FILE).read().strip())
+            import psutil
+            if psutil.pid_exists(old_pid):
+                print(f"[obsidian_agent] already running (PID {old_pid}). Exiting.")
+                sys.exit(0)
+        except Exception:
+            pass  # stale PID file — overwrite it
+    with open(_PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    import atexit
+    atexit.register(lambda: os.path.exists(_PID_FILE) and os.remove(_PID_FILE))
+
+_check_single_instance()
+# ─────────────────────────────────────────────────────────────────────────────
 
 # ==========================================
 # 1. CONFIGURATION
@@ -19,41 +42,186 @@ SESSIONS_FILE = os.path.join(CASEFLOW_PATH, "bot_sessions.json")
 
 bot = telebot.TeleBot(API_TOKEN)
 
+# ── CaseFlow API ──────────────────────────────────────────────────────────────
+CF_API = "http://localhost:8000"
+
+_BRANCH_LABELS = {
+    "A": "Case Analysis",   "B": "Knowledge Query",
+    "C": "Symptom Approach","D": "Progress Note",
+    "E": "Morning Round",   "F": "Interpreter",
+    "G": "Admission Note",  "U": "Freestyle",
+}
+
+# user_id -> {"session_id": str, "state": "processing|waiting_confirm|done"}
+cf_state: dict[str, dict] = {}
+
+
+def _cf_send(chat_id: int, text: str):
+    """Send long text in ≤4000-char chunks, Markdown with plain fallback."""
+    chunks = [text[i:i+4000] for i in range(0, max(len(text), 1), 4000)]
+    for chunk in chunks:
+        try:
+            bot.send_message(chat_id, chunk, parse_mode="Markdown")
+        except Exception:
+            try:
+                bot.send_message(chat_id, chunk)
+            except Exception:
+                pass
+
+
+def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
+    """Background thread: poll /result until processing: False, then send draft."""
+    info = cf_state.get(user_id)
+    if not info:
+        return
+    session_id = info["session_id"]
+    start = time.time()
+
+    while True:
+        time.sleep(6)
+        try:
+            data = _req.get(f"{CF_API}/result/{session_id}", timeout=15).json()
+        except Exception as e:
+            try:
+                bot.edit_message_text(f"❌ ติดต่อ CaseFlow ไม่ได้: {e}", chat_id, progress_msg_id)
+            except Exception:
+                pass
+            cf_state.pop(user_id, None)
+            return
+
+        elapsed = int(time.time() - start)
+
+        if data.get("processing"):
+            try:
+                prog = _req.get(f"{CF_API}/progress/{session_id}", timeout=5).json()
+                running_label = next(
+                    (s["label"] for s in reversed(prog.get("steps", []))
+                     if s.get("status") == "running"), None
+                )
+                msg = f"⏳ CaseFlow กำลังทำงาน ({elapsed}s)"
+                if running_label:
+                    msg += f"\n└ {running_label}..."
+                bot.edit_message_text(msg, chat_id, progress_msg_id)
+            except Exception:
+                pass
+            continue
+
+        # ── Done ─────────────────────────────────────────────────────────────
+        try:
+            bot.delete_message(chat_id, progress_msg_id)
+        except Exception:
+            pass
+
+        if data.get("error"):
+            _cf_send(chat_id, f"❌ CaseFlow error:\n{data['error']}")
+            cf_state.pop(user_id, None)
+            return
+
+        if data.get("needs_branch_confirm"):
+            pb    = data.get("pending_branch", "?")
+            label = _BRANCH_LABELS.get(pb, pb)
+            cf_state[user_id]["state"] = "waiting_confirm"
+            bot.send_message(
+                chat_id,
+                f"🤔 *CaseFlow ตรวจจับว่าเป็น {label} (Branch {pb})*\n\n"
+                f"พิมพ์ `ใช่` เพื่อยืนยัน หรืออธิบายเพิ่มเติมเพื่อแก้",
+                parse_mode="Markdown",
+            )
+            return
+
+        draft = data.get("draft", "")
+        if not draft:
+            bot.send_message(chat_id, "⚠️ CaseFlow ไม่มีผลลัพธ์")
+            cf_state.pop(user_id, None)
+            return
+
+        branch  = data.get("branch", "")
+        version = data.get("version", 1)
+        cf_state[user_id]["state"] = "done"
+
+        header = f"📋 *Branch {branch} — {_BRANCH_LABELS.get(branch, '')} v{version}*\n\n"
+        _cf_send(chat_id, header + draft)
+        bot.send_message(
+            chat_id,
+            "💬 ส่งข้อความต่อเพื่อแก้ไข | `/cfnew` เพื่อเคสใหม่",
+            parse_mode="Markdown",
+        )
+
+
+def _start_caseflow(user_id: str, chat_id: int, text: str):
+    """POST /start → spawn polling thread."""
+    try:
+        r = _req.post(f"{CF_API}/start", json={"input": text}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ ติดต่อ CaseFlow ไม่ได้ (start\\_server.py รันอยู่ไหม?)\n`{e}`",
+                         parse_mode="Markdown")
+        return
+
+    session_id = data["session_id"]
+    cf_state[user_id] = {"session_id": session_id, "state": "processing"}
+    progress_msg = bot.send_message(chat_id, "⏳ CaseFlow กำลังทำงาน...")
+    threading.Thread(
+        target=_poll_and_deliver,
+        args=(user_id, chat_id, progress_msg.message_id),
+        daemon=True,
+    ).start()
+
+
+def _feedback_caseflow(user_id: str, chat_id: int, text: str):
+    """POST /feedback for revision/confirm, then spawn new polling thread."""
+    info = cf_state.get(user_id)
+    if not info:
+        return
+    session_id = info["session_id"]
+    try:
+        r = _req.post(f"{CF_API}/feedback",
+                      json={"session_id": session_id, "message": text}, timeout=10)
+        r.raise_for_status()
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ Feedback error: {e}")
+        return
+
+    cf_state[user_id]["state"] = "processing"
+    progress_msg = bot.send_message(chat_id, "⏳ CaseFlow กำลังแก้ไข...")
+    threading.Thread(
+        target=_poll_and_deliver,
+        args=(user_id, chat_id, progress_msg.message_id),
+        daemon=True,
+    ).start()
+
+
 # Gemini CLI system commands (pass directly without prompt wrapping)
 system_commands = {"/tools", "/model", "/stats", "/version"}
 
 HELP_TEXT = """\
-🤖 *CaseFlow Bot* — Gemini CLI via Telegram
+🤖 *CaseFlow Bot*
+
+━━━ *CaseFlow* (วิเคราะห์เคส AI) ━━━
+`/case <ข้อมูลผู้ป่วย>` — ส่งเคสเข้า CaseFlow
+`/cf <ข้อมูลผู้ป่วย>` — เหมือนกัน (ชื่อสั้น)
+`/cfnew` — เริ่มเคสใหม่ ล้าง session เดิม
+
+เมื่อมี session active — พิมพ์ต่อเพื่อแก้ไขรายงาน
 
 ━━━ *Bot Commands* ━━━
 `/help` — แสดงคำสั่งทั้งหมด
-`/reset` — ล้าง session / เริ่มการสนทนาใหม่
-`/search <คำ>` — ค้นหาเนื้อหาในทุก note ของ vault
-`/ls` — ดูโครงสร้าง vault ปัจจุบัน
-`/sync` — force sync GEMINI.md ทันที (ปกติ auto ทุก 30 วิ)
-`/gaps` — สแกน vault หา wikilinks ที่ยังไม่มี note
-`/confirm` — ยืนยันรัน vault builder จาก /gaps
+`/reset` — ล้าง Gemini session
+`/search <คำ>` — ค้นหาใน vault
+`/ls` — ดูโครงสร้าง vault
+`/sync` — force sync GEMINI.md
+`/gaps` — สแกน vault หา note ที่ขาด
+`/confirm` — ยืนยันรัน vault builder
 `/cancel` — ยกเลิก pending action
 
-━━━ *Vault Builder* (สร้าง Note ด้วย AI) ━━━
+━━━ *Vault Builder* ━━━
 `/run <topic>` — สร้าง note หัวข้อเดียว
 `/build <topic>` — เหมือนกัน
-`/สร้าง <topic>` — เหมือนกัน (ภาษาไทย)
 
-ตัวอย่าง: `/run Sepsis` หรือ `/build Heart Failure`
-
-━━━ *Gemini CLI System Commands* ━━━
-`/tools` — ดู tools ที่ Gemini มี
-`/model` — ดู/เปลี่ยน model ที่ใช้
-`/stats` — ดู token usage สะสม
-`/version` — ดู Gemini CLI version
-
-━━━ *Natural Language* (พิมพ์เลย ไม่ต้อง /) ━━━
-• สร้าง folder Physical Examination ใน vault
-• ดูไฟล์ทั้งหมดใน 02 - Diseases
-• แก้ไข Heart Failure.md เพิ่มหัวข้อ Management
-• รัน vault\\_linker.py เพื่อเพิ่ม wikilinks
-• ย้าย Sepsis.md ไปไว้ใน 02 - Diseases
+━━━ *Gemini CLI* ━━━
+`/tools` `/model` `/stats` `/version`
+พิมพ์ข้อความธรรมดา → Gemini CLI
 """
 
 # เรทราคาปี 2026 (USD per 1M tokens)
@@ -253,6 +421,34 @@ def handle_gemini(message):
     user_id = str(message.from_user.id)
     query = message.text.strip()
 
+    # ── CaseFlow commands ────────────────────────────────────────────────────
+    case_match = re.match(r'^/(case|cf)\s+(.*)', query, re.IGNORECASE | re.DOTALL)
+    if case_match:
+        text = case_match.group(2).strip()
+        if not text:
+            bot.reply_to(message, "⚠️ ใส่ข้อมูลผู้ป่วยด้วย เช่น `/case ชาย 65 ปี เหนื่อยหอบ...`",
+                         parse_mode="Markdown")
+            return
+        pending_confirmation.pop(user_id, None)  # ล้าง /gaps pending ถ้ามี
+        _start_caseflow(user_id, message.chat.id, text)
+        return
+
+    if query.lower() in ["/cfnew", "/cf_new"]:
+        cf_state.pop(user_id, None)
+        bot.reply_to(message, "🗑️ ล้าง CaseFlow session แล้ว — ส่ง `/case` เพื่อเริ่มเคสใหม่",
+                     parse_mode="Markdown")
+        return
+
+    # ── CaseFlow follow-up (revision / confirm) ──────────────────────────────
+    if user_id in cf_state and not query.startswith("/"):
+        state = cf_state[user_id].get("state")
+        if state in ("done", "waiting_confirm"):
+            _feedback_caseflow(user_id, message.chat.id, query)
+            return
+        elif state == "processing":
+            bot.reply_to(message, "⏳ CaseFlow กำลังทำงานอยู่ รอสักครู่...")
+            return
+
     # ── Bot-level commands (no subprocess) ──────────────────────────────────
     if query.lower() in ["/help", "help"]:
         bot.reply_to(message, HELP_TEXT, parse_mode="Markdown")
@@ -287,7 +483,22 @@ def handle_gemini(message):
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(missing, f, ensure_ascii=False, indent=2)
         pending_confirmation[user_id] = {"topics": missing, "json_path": json_path}
-        bot.reply_to(message, format_gap_report(missing), parse_mode="Markdown")
+        # ส่ง summary ก่อน (ไม่เกิน 4096) แล้วค่อย chunk รายละเอียด
+        icons = {"diseases": "🏥", "drugs": "💊", "approaches": "📋", "labs": "🧪"}
+        summary_lines = [f"🔍 พบ *{total} หัวข้อ* ที่ยังไม่มี note:\n"]
+        for t in ["diseases", "drugs", "approaches", "labs"]:
+            items = missing.get(t, [])
+            if items:
+                summary_lines.append(f"{icons.get(t,'📄')} *{t.capitalize()}*: {len(items)} หัวข้อ")
+        summary_lines.append(f"\nพิมพ์ `/confirm` เพื่อสร้างทั้งหมด | `/cancel` เพื่อยกเลิก")
+        bot.reply_to(message, "\n".join(summary_lines), parse_mode="Markdown")
+        # ส่งรายละเอียดเป็น chunks ทีหลัง
+        full_report = format_gap_report(missing)
+        for i in range(0, len(full_report), 3800):
+            try:
+                bot.send_message(message.chat.id, full_report[i:i+3800], parse_mode="Markdown")
+            except Exception:
+                bot.send_message(message.chat.id, full_report[i:i+3800])
         return
 
     if query.lower() in ["/confirm", "yes", "ใช่", "ยืนยัน", "รัน", "ok"]:
