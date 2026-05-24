@@ -102,6 +102,14 @@ if proc is not None:
             print("คำเตือน: ไม่พบ URL ภายใน 30 วินาที — ตรวจสอบว่า cloudflared ติดตั้งถูกต้อง")
             public_url = "(URL ไม่ถูกตรวจจับ)"
 
+# ── เขียน URL ลงไฟล์เพื่อให้ bot อ่านได้ ─────────────────────────────────────
+_CF_URL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cf_url")
+with open(_CF_URL_FILE, "w") as _f:
+    _f.write(public_url or "")
+import atexit as _atexit
+_atexit.register(lambda: os.path.exists(_CF_URL_FILE) and os.remove(_CF_URL_FILE))
+# ─────────────────────────────────────────────────────────────────────────────
+
 print("=" * 55)
 print("  CaseFlow API Server")
 print("=" * 55)

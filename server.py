@@ -539,6 +539,20 @@ async def upload_kb_inbox(req: InboxIngestRequest):
     return {"session_id": session_id, "total": len(specs), "processing": True}
 
 
+@app.get("/info")
+async def get_server_info():
+    """Return public URL written by start_server.py."""
+    url_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cf_url")
+    public_url = ""
+    if os.path.exists(url_file):
+        public_url = open(url_file).read().strip()
+    return {
+        "public_url": public_url or None,
+        "local_url": "http://localhost:8000",
+        "ui": f"{public_url}/static/index.html" if public_url else None,
+    }
+
+
 @app.get("/progress/{session_id}")
 async def get_progress(session_id: str):
     _cleanup_expired()

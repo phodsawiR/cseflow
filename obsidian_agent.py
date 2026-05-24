@@ -924,5 +924,31 @@ _watcher = threading.Thread(target=_vault_watchdog, args=(30,), daemon=True)
 _watcher.start()
 print("👁️  Vault watchdog started (30s interval)")
 
+def _send_startup_url():
+    """รอ server พร้อม แล้วส่ง public URL ให้ admin ทาง Telegram."""
+    for _ in range(15):          # รอสูงสุด 15 × 2s = 30s
+        time.sleep(2)
+        try:
+            info = _req.get(f"{CF_API}/info", timeout=3).json()
+            url  = info.get("public_url") or ""
+            ui   = info.get("ui") or ""
+            if url:
+                msg = (
+                    f"🚀 *CaseFlow พร้อมใช้งาน*\n\n"
+                    f"🌐 Public URL:\n`{url}`\n\n"
+                    f"📱 Mobile UI:\n{ui}\n\n"
+                    f"📖 API Docs:\n{url}/docs"
+                )
+            else:
+                msg = "🚀 *CaseFlow พร้อมใช้งาน* (Local only — ไม่มี public URL)"
+            bot.send_message(ALLOWED_USER_ID, msg, parse_mode="Markdown")
+            return
+        except Exception:
+            pass
+    # server ไม่ตอบหลัง 30s
+    bot.send_message(ALLOWED_USER_ID, "⚠️ Bot เริ่มทำงานแล้ว แต่ติดต่อ CaseFlow server ไม่ได้")
+
+threading.Thread(target=_send_startup_url, daemon=True).start()
+
 print("🚀 Bot is running — send /help for commands")
 bot.polling(none_stop=True, skip_pending=True)
