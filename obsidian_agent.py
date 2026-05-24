@@ -7,7 +7,18 @@ import sys
 import json
 import threading
 import requests as _req
-from gap_finder import find_missing_topics, format_gap_report
+from dotenv import load_dotenv as _load_dotenv
+from gap_finder import find_missing_topics, format_gap_report, classify_topic
+
+_load_dotenv()
+
+# ── Gemini client for /ward extraction ───────────────────────────────────────
+try:
+    from google import genai as _genai
+    _gemini = _genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    _GEMINI_OK = True
+except Exception:
+    _GEMINI_OK = False
 
 # ── Single-instance guard ─────────────────────────────────────────────────────
 _PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".obsidian_agent.pid")
@@ -41,6 +52,48 @@ VAULT_PATH = os.path.join(CASEFLOW_PATH, "obsidian")
 SESSIONS_FILE = os.path.join(CASEFLOW_PATH, "bot_sessions.json")
 
 bot = telebot.TeleBot(API_TOKEN)
+
+# ── Ward buzzword extractor ───────────────────────────────────────────────────
+
+def _extract_ward_buzzwords(text: str) -> list[str]:
+    """ใช้ Gemini สกัด medical topics จากใบส่งเวร → list of topic strings."""
+    if not _GEMINI_OK:
+        return []
+    prompt = (
+        "You are a medical knowledge base curator for a Thai medical student's Obsidian vault.\n"
+        "Extract all distinct medical topics from this patient handover note that deserve individual notes.\n\n"
+        "Include: diseases, syndromes, specific conditions, named organisms, specific drug names.\n"
+        "Exclude: patient names, room numbers, HN numbers, dates, staff names, generic words (fever, plan, improved).\n\n"
+        "Rules:\n"
+        "- Use standard English medical terminology\n"
+        "- Keep names concise (2-5 words)\n"
+        "- Expand abbreviations where known (e.g. AVNRT → AVNRT, CTEPH → CTEPH)\n"
+        "- Do NOT include dose numbers or lab values\n\n"
+        "Return ONLY a JSON array of strings. No explanation.\n\n"
+        f"Handover:\n{text[:4000]}"
+    )
+    try:
+        resp = _gemini.models.generate_content(model="gemini-3.5-flash", contents=prompt)
+        raw = resp.text.strip()
+        m = re.search(r'\[.*?\]', raw, re.DOTALL)
+        if m:
+            return [t.strip() for t in json.loads(m.group(0)) if isinstance(t, str) and t.strip()]
+    except Exception as e:
+        print(f"[ward] extraction error: {e}")
+    return []
+
+
+def _filter_new_topics(topics: list[str]) -> list[str]:
+    """กรองเฉพาะ topics ที่ยังไม่มี note ใน vault."""
+    existing: set[str] = set()
+    if os.path.exists(VAULT_PATH):
+        for root, dirs, files in os.walk(VAULT_PATH):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+            for fname in files:
+                if fname.endswith(".md"):
+                    existing.add(fname[:-3].lower().replace("_", " ").strip())
+    return [t for t in topics if t.lower().replace("_", " ").strip() not in existing]
+
 
 # ── CaseFlow API ──────────────────────────────────────────────────────────────
 CF_API = "http://localhost:8000"
@@ -221,10 +274,12 @@ HELP_TEXT = """\
 `/cf <ข้อมูลผู้ป่วย>` — เหมือนกัน (ชื่อสั้น)
 `/cfnew` — เริ่มเคสใหม่ ล้าง session เดิม
 `/cfapprove` — บันทึก report ลง vault
-
 Branches: A=case | B=query | C=symptom | D=progress
           E=round | F=interpret | G=admission | U=freestyle
-เมื่อมี session active — พิมพ์ต่อเพื่อแก้ไขรายงาน
+
+━━━ *Ward Buzzer* (สร้าง notes จากใบส่งเวร) ━━━
+`/ward <ใบส่งเวร>` — สกัด diseases/drugs แล้ว confirm สร้าง notes
+พิมพ์ `/confirm` เพื่อรัน vault builder
 
 ━━━ *Bot Commands* ━━━
 `/help` — แสดงคำสั่งทั้งหมด
@@ -476,6 +531,71 @@ def handle_gemini(message):
                          parse_mode="Markdown")
         except Exception as e:
             bot.reply_to(message, f"❌ Approve error: {e}")
+        return
+
+    # ── /ward — สกัด medical buzzwords จากใบส่งเวร ────────────────────────────
+    ward_match = re.match(r'^/ward\s+(.*)', query, re.IGNORECASE | re.DOTALL)
+    if ward_match:
+        ward_text = ward_match.group(1).strip()
+        if len(ward_text) < 30:
+            bot.reply_to(message, "⚠️ ข้อความสั้นเกินไป — paste ใบส่งเวรหลัง `/ward`")
+            return
+        if not _GEMINI_OK:
+            bot.reply_to(message, "❌ Gemini API ไม่พร้อม — เช็ค GOOGLE_API_KEY ใน .env")
+            return
+
+        scanning_msg = bot.reply_to(message, "🔍 กำลังสกัด medical terms...")
+        _uid = user_id
+
+        def _do_ward():
+            all_topics = _extract_ward_buzzwords(ward_text)
+            new_topics = _filter_new_topics(all_topics)
+            try:
+                bot.delete_message(message.chat.id, scanning_msg.message_id)
+            except Exception:
+                pass
+            if not all_topics:
+                bot.send_message(message.chat.id, "❌ สกัด terms ไม่ได้ — ลองใหม่อีกครั้ง")
+                return
+            already = len(all_topics) - len(new_topics)
+            if not new_topics:
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ ครบแล้ว — ทุก topic ({len(all_topics)}) มี note ใน vault แล้ว",
+                )
+                return
+            classified: dict[str, list[str]] = {}
+            for t in new_topics:
+                cat = classify_topic(t)
+                classified.setdefault(cat, []).append(t)
+            json_path = os.path.join(CASEFLOW_PATH, "ward_topics.json")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(classified, f, ensure_ascii=False, indent=2)
+            pending_confirmation[_uid] = {"topics": classified, "json_path": json_path}
+            icons = {"diseases": "🏥", "drugs": "💊", "approaches": "📋", "labs": "🧪"}
+            lines = [
+                f"🔍 สกัดได้ *{len(all_topics)} topics* จากใบส่งเวร",
+                f"ใน vault แล้ว: {already}  |  ต้องสร้างใหม่: *{len(new_topics)}*\n",
+            ]
+            for cat in ["diseases", "drugs", "approaches", "labs"]:
+                items = classified.get(cat, [])
+                if not items:
+                    continue
+                lines.append(f"{icons.get(cat,'📄')} *{cat.capitalize()}* ({len(items)}):")
+                for item in items[:20]:
+                    lines.append(f"  • {item}")
+                if len(items) > 20:
+                    lines.append(f"  … และอีก {len(items)-20} topics")
+                lines.append("")
+            lines.append("พิมพ์ `/confirm` เพื่อสร้าง notes ทั้งหมด | `/cancel` เพื่อยกเลิก")
+            full = "\n".join(lines)
+            for i in range(0, len(full), 3800):
+                try:
+                    bot.send_message(message.chat.id, full[i:i+3800], parse_mode="Markdown")
+                except Exception:
+                    bot.send_message(message.chat.id, full[i:i+3800])
+
+        threading.Thread(target=_do_ward, daemon=True).start()
         return
 
     # ── CaseFlow follow-up (revision / confirm) ──────────────────────────────
