@@ -303,7 +303,7 @@ def _query_knowledge(topic: str, focus: str) -> tuple[str, str]:
                 prompt=(
                     f"ค้นหาข้อมูล {focus} เรื่อง {topic} สำหรับ ward medicine ปี 4\n"
                     f"เน้น: current guidelines, key evidence, สิ่งที่ต้องรู้บน ward\n"
-                    f"สรุปเป็นข้อๆ ภาษาอังกฤษ/ไทยผสม ไม่เกิน 800 คำ"
+                    f"สรุปเป็นข้อๆ ภาษาอังกฤษ/ไทยผสม ไม่เกิน 500 คำ"
                 ),
             )
             research_result = "" if result.startswith("[ERROR") else result
@@ -342,8 +342,8 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
                 f"- กลไกระดับ molecular/cellular → organ dysfunction → clinical signs\n"
                 f"- ทำไมแต่ละ symptom/sign จึงเกิด (เชื่อม mechanism)\n"
                 f"- Key mediators / pathways สำคัญ\n"
-                f"กระชับ ไม่เกิน 400 คำ\n\n"
-                f"Context:\n{knowledge[:1500]}"
+                f"กระชับ ไม่เกิน 250 คำ\n\n"
+                f"Context:\n{knowledge[:1200]}"
             ),
             "",
         ),
@@ -354,15 +354,15 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
                 f"- ยาแต่ละตัว: class | dose range | route | key SE | contraindication\n"
                 f"- Drug interactions สำคัญ 2-3 คู่\n"
                 f"- Monitoring parameters\n"
-                f"เน้นยาที่ใช้จริงบน ward ไม่ใช่ทุกตัวที่มีในโลก\n\n"
-                f"Context:\n{knowledge[:1500]}"
+                f"เน้นยาที่ใช้จริงบน ward ไม่ใช่ทุกตัวที่มีในโลก กระชับ ไม่เกิน 300 คำ\n\n"
+                f"Context:\n{knowledge[:1200]}"
             ),
             "",
         ),
     ])
 
-    print(f"  [3/4] analyzer — synthesize full note...")
-    content = call_agent(
+    print(f"  [3/3] analyzer — synthesize + format final note...")
+    return call_agent(
         "analyzer",
         system=(
             "คุณคืออาจารย์อายุรศาสตร์ระดับ Attending "
@@ -375,7 +375,7 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 {template}
 
 === Knowledge Base ===
-{knowledge[:2000] if knowledge else "(ใช้ความรู้ทั่วไป)"}
+{knowledge[:1500] if knowledge else "(ใช้ความรู้ทั่วไป)"}
 
 === Pathophysiology ===
 {patho_result}
@@ -393,11 +393,9 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 - Management: ใช้ dose จาก drug_agent (ห้าม hallucinate dose)
 - Attending Questions: 3 ข้อที่อาจารย์ถามจริงบน ward พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
+- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ห้ามมีหัวข้อนอก template
 """,
     )
-
-    print(f"  [4/4] formatter — Obsidian format...")
-    return call_agent("formatter", system=load_prompt("formatter_obsidian"), prompt=content)
 
 
 def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
@@ -412,8 +410,8 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
     )
     knowledge = _best_knowledge(kb, research)
 
-    print(f"  [2/3] drug_agent — comprehensive drug profile...")
-    content = call_agent(
+    print(f"  [2/2] drug_agent — comprehensive drug profile + format...")
+    return call_agent(
         "drug_agent",
         system=(
             "คุณคือเภสัชกรคลินิกและอาจารย์แพทย์เชี่ยวชาญด้านยา "
@@ -426,7 +424,7 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
 {template}
 
 === Pharmacology Context ===
-{knowledge[:2500] if knowledge else "(ใช้ความรู้ทั่วไป)"}
+{knowledge[:1800] if knowledge else "(ใช้ความรู้ทั่วไป)"}
 
 === KG Context ===
 {kg_context or "(ไม่มี)"}
@@ -439,11 +437,9 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
 - Drug interactions: อย่างน้อย 3 คู่สำคัญ + กลไก + วิธีจัดการ
 - Attending Questions: 3 ข้อที่อาจารย์ถามเรื่องยานี้บ่อย พร้อมคำตอบ
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรคหรือยาอื่น
+- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
     )
-
-    print(f"  [3/3] formatter — Obsidian format...")
-    return call_agent("formatter", system=load_prompt("formatter_obsidian"), prompt=content)
 
 
 def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
@@ -472,8 +468,8 @@ def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
         ),
     )
 
-    print(f"  [2/3] analyzer — synthesize approach note...")
-    content = call_agent(
+    print(f"  [2/2] analyzer — synthesize + format approach note...")
+    return call_agent(
         "analyzer",
         system=(
             "คุณคืออาจารย์อายุรศาสตร์เชี่ยวชาญ clinical reasoning "
@@ -497,11 +493,9 @@ def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
 - Key Pertinent Negatives: ระบุว่าถ้าไม่มีอาการนี้ตัด DDx อะไรออก
 - Attending Questions: 3 ข้อที่อาจารย์ถาม approach นี้บ่อย
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
+- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
     )
-
-    print(f"  [3/3] formatter — Obsidian format...")
-    return call_agent("formatter", system=load_prompt("formatter_obsidian"), prompt=content)
 
 
 def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
@@ -529,8 +523,8 @@ def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
         ),
     )
 
-    print(f"  [2/3] analyzer — synthesize lab note...")
-    content = call_agent(
+    print(f"  [2/2] analyzer — synthesize + format lab note...")
+    return call_agent(
         "analyzer",
         system=(
             "คุณคืออาจารย์อายุรศาสตร์เชี่ยวชาญ lab interpretation "
@@ -554,11 +548,9 @@ def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
 - Pitfalls: เน้น false results ที่หลอกได้บ่อยและ clinical impact
 - Attending Questions: 3 ข้อที่อาจารย์ถามเรื่อง lab นี้
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ lab อื่น
+- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
     )
-
-    print(f"  [3/3] formatter — Obsidian format...")
-    return call_agent("formatter", system=load_prompt("formatter_obsidian"), prompt=content)
 
 
 # ─── Dispatcher ──────────────────────────────────────────────────────────────
