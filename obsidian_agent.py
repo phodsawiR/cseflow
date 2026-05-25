@@ -982,4 +982,14 @@ def _send_startup_url():
 threading.Thread(target=_send_startup_url, daemon=True).start()
 
 print("Bot is running — send /help for commands")
-bot.polling(none_stop=True, skip_pending=True)
+while True:
+    try:
+        bot.polling(none_stop=True, skip_pending=True)
+    except Exception as _poll_err:
+        err_str = str(_poll_err)
+        if "409" in err_str or "Conflict" in err_str:
+            print(f"[bot] 409 conflict — รอ 35s แล้ว retry...")
+            time.sleep(35)
+        else:
+            print(f"[bot] polling error: {_poll_err} — retry in 5s")
+            time.sleep(5)
