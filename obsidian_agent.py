@@ -787,7 +787,6 @@ def handle_gemini(message):
         cmd = [
             GEMINI_PATH,
             "--prompt", query,
-            "--yolo",
             "--output-format", "json",
             "--model", "gemini-3.1-pro-preview",
         ]
