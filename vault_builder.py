@@ -303,7 +303,7 @@ def _query_knowledge(topic: str, focus: str) -> tuple[str, str]:
                 prompt=(
                     f"ค้นหาข้อมูล {focus} เรื่อง {topic} สำหรับ ward medicine ปี 4\n"
                     f"เน้น: current guidelines, key evidence, สิ่งที่ต้องรู้บน ward\n"
-                    f"สรุปเป็นข้อๆ ภาษาอังกฤษ/ไทยผสม ไม่เกิน 500 คำ"
+                    f"สรุปเป็นข้อๆ ภาษาอังกฤษ/ไทยผสม ไม่เกิน 800 คำ"
                 ),
             )
             research_result = "" if result.startswith("[ERROR") else result
