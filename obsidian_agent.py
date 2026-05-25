@@ -836,6 +836,35 @@ def handle_gemini(message):
                             pass
 
         process.wait()
+
+        # ── Session expired? → reset แล้ว retry ด้วย session ใหม่ ────────────
+        if "Invalid session identifier" in full_raw_output or "Error resuming session" in full_raw_output:
+            active_sessions.pop(user_id, None)
+            save_sessions(active_sessions)
+            active_sessions[user_id] = {"id": f"user-{user_id}-{int(time.time())}", "is_new": True}
+            session_info = active_sessions[user_id]
+            # rebuild cmd with new session
+            new_cmd = [x for x in cmd if x not in ["--resume", session_info["id"]]]
+            # replace old session flags with new ones
+            if "--session-id" not in new_cmd:
+                new_cmd.extend(["--session-id", session_info["id"]])
+                session_info["is_new"] = False
+            try:
+                bot.edit_message_text("⏳ Session หมดอายุ — เริ่มใหม่...", message.chat.id, progress_msg.message_id)
+            except Exception:
+                pass
+            process2 = subprocess.Popen(new_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        text=True, encoding="utf-8", errors="ignore",
+                                        bufsize=1, shell=True, cwd=CASEFLOW_PATH)
+            full_raw_output = ""
+            while True:
+                line = process2.stdout.readline()
+                if not line and process2.poll() is not None:
+                    break
+                if line:
+                    full_raw_output += line
+            process2.wait()
+
         bot.delete_message(message.chat.id, progress_msg.message_id)
 
         # Parse JSON output
@@ -915,14 +944,16 @@ def _vault_watchdog(interval_seconds: int = 30):
 # ==========================================
 # 8. STARTUP
 # ==========================================
-print("🤖 CaseFlow Bot starting...")
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+print("CaseFlow Bot starting...")
 update_vault_context()
 print("✅ Vault context synced")
 
 # Start auto-sync watchdog (daemon — dies with main process)
 _watcher = threading.Thread(target=_vault_watchdog, args=(30,), daemon=True)
 _watcher.start()
-print("👁️  Vault watchdog started (30s interval)")
+print("[watchdog] Vault watchdog started (30s interval)")
 
 def _send_startup_url():
     """รอ server พร้อม แล้วส่ง public URL ให้ admin ทาง Telegram."""
@@ -950,5 +981,5 @@ def _send_startup_url():
 
 threading.Thread(target=_send_startup_url, daemon=True).start()
 
-print("🚀 Bot is running — send /help for commands")
+print("Bot is running — send /help for commands")
 bot.polling(none_stop=True, skip_pending=True)
