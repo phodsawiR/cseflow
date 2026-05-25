@@ -391,7 +391,7 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 - Clinical Presentation: อิง patho อธิบายว่าทำไม sign/symptom นั้นจึงเกิด
 - DDx table: ระบุ key differentiating feature จาก patho/investigation
 - Management: ใช้ dose จาก drug_agent (ห้าม hallucinate dose)
-- Attending Questions: 3 ข้อที่อาจารย์ถามจริงบน ward พร้อมคำตอบที่ลึก
+- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — เลือกจาก pitfall ที่มักเข้าใจผิด / unusual presentation / key decision point ที่ unique กับโรคนี้ / mechanism ที่ดูง่ายแต่ลึกกว่าที่คิด ห้ามถาม definition หรือ question ที่ถามได้กับทุกโรค พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
 - Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ห้ามมีหัวข้อนอก template
 """,
@@ -435,7 +435,7 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
 - Dose adjustment: renal + hepatic (ถ้าเกี่ยวข้อง)
 - Key SE table: SE ที่พบบ่อย + SE อันตราย + กลไก + monitoring
 - Drug interactions: อย่างน้อย 3 คู่สำคัญ + กลไก + วิธีจัดการ
-- Attending Questions: 3 ข้อที่อาจารย์ถามเรื่องยานี้บ่อย พร้อมคำตอบ
+- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — เลือกจาก pharmacology ที่ดูง่ายแต่ลึก / dose pitfall / drug interaction ที่อันตรายจริง / situation ที่ต้องตัดสินใจใช้หรือไม่ใช้ยา ห้ามถาม MOA แบบ textbook ตรงๆ พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรคหรือยาอื่น
 - Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
@@ -491,7 +491,7 @@ def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
 - Characterize table: ทุกคำถามต้องมีเหตุผลว่าถามทำไม
 - Don't Miss section: ต้องระบุ why dangerous + clue ที่จะจับได้
 - Key Pertinent Negatives: ระบุว่าถ้าไม่มีอาการนี้ตัด DDx อะไรออก
-- Attending Questions: 3 ข้อที่อาจารย์ถาม approach นี้บ่อย
+- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — เลือกจาก red flag ที่มักพลาด / DDx ที่แยกยาก / สถานการณ์ที่ต้องตัดสินใจเร็วบน ward / pattern ที่นักศึกษามักอ่านผิด ห้ามถาม DDx list ตรงๆ พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
 - Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
@@ -546,7 +546,7 @@ def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
 - Elevated/Low tables: ต้องมี cause + mechanism + clinical clue ครบทุกแถว
 - Pattern Recognition table: เน้น pattern ที่พบบ่อยบน ward
 - Pitfalls: เน้น false results ที่หลอกได้บ่อยและ clinical impact
-- Attending Questions: 3 ข้อที่อาจารย์ถามเรื่อง lab นี้
+- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — เลือกจาก false result ที่หลอกบ่อย / pattern ที่ interpret ผิดประจำ / สถานการณ์ที่ค่า lab ขัดกับ clinical / ข้อจำกัดของ test นี้ที่ต้องรู้ ห้ามถาม normal value ตรงๆ พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ lab อื่น
 - Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
 """,
