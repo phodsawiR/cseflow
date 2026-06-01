@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>CaseFlow</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });</script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -295,6 +297,21 @@
     }
     .step-error .step-label { color: var(--danger); }
 
+    /* ── Mermaid diagram ── */
+    .mermaid-container {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .mermaid-container svg {
+      max-width: 100%;
+      height: auto;
+    }
+
     /* Hidden utility */
     .hidden { display: none !important; }
   </style>
@@ -537,6 +554,7 @@ placeholder="sources:
     E: 'Branch E — Morning Round',
     F: 'Branch F — Interpreter',
     G: 'Branch G — Admission Note',
+    N: 'Branch N — Note Narrative',
     U: 'Branch U — Freestyle',
   };
 
@@ -571,7 +589,30 @@ placeholder="sources:
   }
 
   function renderDraft(text) {
-    document.getElementById('draft-output').innerHTML = marked.parse(text || '');
+    const el = document.getElementById('draft-output');
+    el.innerHTML = marked.parse(text || '');
+
+    // Render Mermaid diagrams: marked outputs <code class="language-mermaid">
+    el.querySelectorAll('code.language-mermaid').forEach((codeEl, i) => {
+      const pre = codeEl.parentElement; // <pre><code class="language-mermaid">...</code></pre>
+      const container = document.createElement('div');
+      container.className = 'mermaid-container';
+      const mermaidDiv = document.createElement('div');
+      mermaidDiv.className = 'mermaid';
+      mermaidDiv.textContent = codeEl.textContent;
+      container.appendChild(mermaidDiv);
+      if (pre && pre.tagName === 'PRE') {
+        pre.replaceWith(container);
+      } else {
+        codeEl.replaceWith(container);
+      }
+    });
+
+    // Trigger Mermaid rendering
+    const mermaidEls = el.querySelectorAll('.mermaid');
+    if (mermaidEls.length > 0) {
+      try { mermaid.run({ nodes: mermaidEls }); } catch (e) { console.warn('Mermaid render error:', e); }
+    }
   }
 
   function updateSessionInfo() {

@@ -43,6 +43,7 @@ BRANCH_LABELS: dict[str, str] = {
     "E": "Morning Round Prep",
     "F": "Lab/EKG Interpreter",
     "G": "Admission Note (ใบขาว)",
+    "N": "Note Narrative (แปล Note อ่านง่าย)",
     "U": "Freestyle / Omni",
 }
 
@@ -59,9 +60,17 @@ def detect_branch(raw_input: str, default: str = "A") -> str:
 
     # 🌟 ด่านที่ 0: ดักจับคำสั่งบังคับ (Manual Override)
     # ถ้าพิมพ์ [Branch X] ระบบจะเคารพคำสั่งนี้ทันที ไม่สนเงื่อนไขอื่น!
-    override_match = re.search(r'\[branch\s*([a-g])\]', text)
+    override_match = re.search(r'\[branch\s*([a-gn])\]', text)
     if override_match:
         return override_match.group(1).upper()
+
+    # N: Note Narrative — แปล note ดิบที่มีคำย่อให้อ่านง่าย ตามลำดับเวลา
+    if any(k in text for k in [
+        "แปล note", "แปลโน้ต", "อ่าน note", "note narrative",
+        "แปลคำย่อ", "ขยาย note", "สรุป note", "note จาก",
+        "note คนไข้", "ดู note", "note ดิบ"
+    ]):
+        return "N"
 
     # G: Admission Note (ใบขาว)
     if any(k in text for k in [
@@ -239,7 +248,7 @@ class CaseSession:
 
         if stripped not in _CONFIRM_WORDS:
             # ตรวจ pattern ตัวอักษรตรงๆ: "D", "Branch D", "branch d"
-            direct_match = re.match(r'^(?:branch\s*)?([a-gu])$', stripped)
+            direct_match = re.match(r'^(?:branch\s*)?([a-gnu])$', stripped)
             if direct_match:
                 new_branch = direct_match.group(1).upper()
             else:
@@ -288,7 +297,7 @@ class CaseSession:
     # REVISION: ตีกลับแก้เฉพาะส่วน
     # ─────────────────────────────────────────
     # Branch ที่ใช้ full re-run เมื่อรับ feedback (ไม่มี section structure)
-    _FULL_RERUN_BRANCHES = {"B", "C", "E", "F"}
+    _FULL_RERUN_BRANCHES = {"B", "C", "E", "F", "N"}
 
     def revise(self, feedback: str) -> str:
         if self.branch in self._FULL_RERUN_BRANCHES:
@@ -382,7 +391,8 @@ Instruction: {routing['instruction']}
             "A": "case", "B": "query",
             "C": "symptom", "D": "report",
             "E": "round", "F": "interpret",
-            "G": "admission", "U": "freestyle"
+            "G": "admission", "N": "note_narrative",
+            "U": "freestyle"
         }
         prefix = prefix_map.get(self.branch, "case")
         
@@ -476,6 +486,7 @@ Instruction: {routing['instruction']}
         # Execute steps
         MAX_STEPS = 5
         context: Dict[str, Any] = {"patient_data": self.patient_data}
+        output_format = plan.get("output_format", "")
         result = ""
 
         for step in plan.get("steps", [])[:MAX_STEPS]:
@@ -490,11 +501,21 @@ Instruction: {routing['instruction']}
 
             input_data = context.get(input_var, self.patient_data) if input_var else self.patient_data
 
+            # formatter ใน Branch U ใช้ formatter_u (flexible) แทน formatter.md (Branch A)
+            if agent == "formatter":
+                system_prompt = load_prompt("formatter_u")
+                fmt_instruction = instruction
+                if output_format:
+                    fmt_instruction = f"Output format: {output_format}\n{instruction}"
+            else:
+                system_prompt = load_prompt(agent)
+                fmt_instruction = instruction
+
             try:
                 step_result = call_agent(
                     agent,
-                    system=load_prompt(agent),
-                    prompt=f"Instruction: {instruction}\n\nInput:\n{input_data}"
+                    system=system_prompt,
+                    prompt=f"Instruction: {fmt_instruction}\n\nInput:\n{input_data}"
                 )
                 if step_result.startswith("[ERROR"):
                     raise RuntimeError(step_result)
@@ -674,9 +695,9 @@ Instruction: {routing['instruction']}
         elif self.branch == "D":
             pi_checked = call_agent("pi_checker", prompt=patient_data)
             source = self._get_kb_sources(pi_checked)
-            report = call_agent("report_architect", prompt=f"Data: {patient_data}\n{get_extras('report_architect')}")
-            drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nProgress note draft: {report}\nReview all medications: current drugs, dosages, renal/hepatic adjustments needed, monitoring parameters.")
-            score_result = call_agent("score_agent", prompt=f"Patient: {patient_data}\nProgress note: {report}\nCalculate relevant clinical scores for severity monitoring and treatment decisions.")
+            report = call_agent("report_architect", prompt=f"Data: {patient_data}\nSources (ใช้ประกอบการวิเคราะห์ DDx และ Plan for diagnosis):\n{source}\n{get_extras('report_architect')}")
+            drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nDiscussion draft: {report}\nระบุยาที่เกี่ยวข้องกับแต่ละ problem: dose, renal/hepatic adjustment, monitoring parameters, drug interactions.")
+            score_result = call_agent("score_agent", prompt=f"Patient: {patient_data}\nDiscussion draft: {report}\nคำนวณ clinical prediction scores ที่ระบุใน A section เช่น Wells, Geneva, CURB-65, TIMI พร้อม interpretation.")
             analysis = call_agent("analyzer", prompt=f"Draft: {report}\nSources: {source}\nDrug review: {drug_info}\nClinical scores: {score_result}{get_extras('analyzer')}")
             kg_flags = _kg_drug_flags(pi_checked)
             challenge = call_agent("challenger", prompt=f"Draft: {report}\nAnalysis: {analysis}\nSources: {source}{kg_flags}{get_extras('challenger')}")
@@ -689,20 +710,24 @@ Instruction: {routing['instruction']}
             )
 
         # -----------------------------------------
-        # Branch C: Symptom Approach
+        # Branch C: Symptom Approach (Systematic)
         # -----------------------------------------
         elif self.branch == "C":
             symptom_map = call_agent("symptom_mapper", prompt=f"Data: {patient_data}{get_extras('symptom_mapper', True)}")
             source = self._get_kb_sources(patient_data)
+
+            # Parallel: approach_flowchart + drug_agent + patho_agent
+            flowchart = call_agent("approach_flowchart", prompt=f"Chief complaint: {patient_data}\nSymptom map:\n{symptom_map}")
             drug_info = call_agent("drug_agent", prompt=f"Symptom/presentation: {patient_data}\nSources: {source}\nSymptom map: {symptom_map}\nList drugs of choice, dosages, and red-flag medications to avoid.")
             patho = call_agent("patho_agent", prompt=f"Patient presentation: {patient_data}\nSymptom map: {symptom_map}\nExplain pathophysiology of leading diagnosis and key DDx linking to these symptoms.")
+
             analysis = call_agent("analyzer", prompt=f"Map: {symptom_map}\nSources: {source}\nPathophysiology: {patho}\nDrug options: {drug_info}")
 
             self._pipeline_context = {"source": source, "drug_info": drug_info}
             return call_agent(
                 "formatter",
-                system=load_prompt("formatter_cef"),
-                prompt=f"Branch: C\nMap: {symptom_map}\nAnalysis: {analysis}\nPathophysiology: {patho}\nDrug options: {drug_info}{get_extras('formatter', True)}"
+                system=load_prompt("formatter_c"),
+                prompt=f"Branch: C\nMap: {symptom_map}\nMindmap:\n{flowchart}\nAnalysis: {analysis}\nPathophysiology: {patho}\nDrug options: {drug_info}{get_extras('formatter', True)}"
             )
 
         # -----------------------------------------
@@ -711,7 +736,7 @@ Instruction: {routing['instruction']}
         elif self.branch == "E":
             source = self._get_kb_sources(patient_data)
             round_prep = call_agent("round_coach", prompt=f"Data: {patient_data}\nSources: {source}")
-            drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nRound prep: {round_prep}\nSummarize all medications: current drugs, recent changes, monitoring needed. Format for attending presentation.")
+            drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nRound prep: {round_prep}\nระบุ: (1) ยาที่ต้องให้ตอนเช้าพร้อม dose และเวลา (2) ยาที่ต้อง monitor parameter วันนี้ (3) ยาที่อาจทำให้เกิด side effect ที่ต้องถามคนไข้ตอนเช้า")
             lab_interp = call_agent("interpreter", prompt=f"Patient: {patient_data}\nInterpret all lab values, ABG, ECG findings in clinical context. Highlight trends and critical values.")
             score_result = call_agent("score_agent", prompt=f"Patient: {patient_data}\nRound prep: {round_prep}\nCalculate severity scores relevant for morning round presentation to attending.")
             prof = call_agent("professor", prompt=f"Data: {patient_data}\nPrep: {round_prep}\nDrug review: {drug_info}\nLabs: {lab_interp}\nScores: {score_result}")
@@ -768,6 +793,59 @@ Instruction: {routing['instruction']}
             answer = call_agent("query_agent", prompt=f"Q: {patient_data}\nSources: {kb_result}{get_extras('query_agent')}")
             self._pipeline_context = {"source": kb_result}
             return call_agent("formatter", system=load_prompt("formatter_b"), prompt=answer)
+
+        # -----------------------------------------
+        # Branch N: Note Narrative (แปล Note อ่านง่าย)
+        # -----------------------------------------
+        elif self.branch == "N":
+            pi_checked = call_agent("pi_checker", prompt=patient_data)
+
+            # ขั้น 1: Interpreter ขยายคำย่อ + แปลค่า lab/vital ทั้งหมด
+            expanded = call_agent(
+                "interpreter",
+                prompt=(
+                    f"ขยายทุกคำย่อทางการแพทย์ให้เป็นภาษาเต็ม และแปลค่า lab / vital signs "
+                    f"ให้เป็นภาษาที่อ่านเข้าใจง่าย โดยระบุ normal range และ clinical significance สั้นๆ\n\n"
+                    f"Note:\n{pi_checked}"
+                )
+            )
+
+            # ขั้น 2: Report Architect จัด SOAP ตามลำดับเวลา แต่ละ problem แยกชัด ไม่ลง DDx ลึก
+            report = call_agent(
+                "report_architect",
+                prompt=(
+                    f"Data (original note):\n{patient_data}\n\n"
+                    f"Expanded (คำย่อขยายแล้ว + ค่า lab แปลแล้ว):\n{expanded}\n\n"
+                    f"จัดโครงสร้าง SOAP ตามลำดับเวลา (visit เก่า → ใหม่) "
+                    f"แต่ละช่วงเวลาระบุ Problem list สั้นๆ ชัดเจน "
+                    f"ไม่ต้องวิเคราะห์ DDx ลึก เน้นความเปลี่ยนแปลงระหว่างช่วงเวลา"
+                    f"{get_extras('report_architect')}"
+                )
+            )
+
+            # ขั้น 3: Drug agent ดึงยาทั้งหมด + monitoring parameters สั้นๆ
+            drug_info = call_agent(
+                "drug_agent",
+                prompt=(
+                    f"Patient note:\n{patient_data}\n\n"
+                    f"ระบุยาทุกตัวที่กล่าวถึงใน note พร้อม:\n"
+                    f"1. ชื่อยาเต็ม + วัตถุประสงค์\n"
+                    f"2. Monitoring parameters ที่สำคัญ (สั้นๆ)\n"
+                    f"3. ผลข้างเคียงที่ควรระวัง (ถ้ามี)"
+                )
+            )
+
+            self._pipeline_context = {"drug_info": drug_info}
+            return call_agent(
+                "formatter",
+                system=load_prompt("formatter_n"),
+                prompt=(
+                    f"Expanded note:\n{expanded}\n\n"
+                    f"SOAP draft (chronological):\n{report}\n\n"
+                    f"Drug & monitoring info:\n{drug_info}"
+                    f"{get_extras('formatter', True)}"
+                )
+            )
 
         # -----------------------------------------
         # Branch U: Freestyle / Omni (Phase 1 — Planning)

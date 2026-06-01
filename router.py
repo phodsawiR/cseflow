@@ -5,17 +5,22 @@ from contextvars import ContextVar
 import anthropic
 from google import genai
 from google.genai import types
-from google.genai.types import GenerateContentConfig, GoogleSearch, Tool, HttpOptions
 from dotenv import load_dotenv
 import ollama
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
 
-claude = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+claude        = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# ── Progress tracking ───────────────────────────────────────────────────────────
+# ── Model IDs ──────────────────────────────────────────────────────────────────
+_CLAUDE_MODEL          = "claude-sonnet-4-6"
+_GEMINI_LATEST_MODEL   = "gemini-3.5-flash"   # newest frontier-class (May 2026)
+_GEMINI_THINKING_MODEL = "gemini-3.1-pro-preview"  # latest Pro — extended thinking
+_GEMINI_FLASH_MODEL    = "gemini-3.5-flash"    # fast structured tasks (same base as latest)
+
+# ── Progress tracking ──────────────────────────────────────────────────────────
 _current_session: ContextVar[str] = ContextVar("current_session", default="")
 _step_log: dict[str, list] = {}
 
@@ -36,6 +41,7 @@ AGENT_LABELS: Dict[str, str] = {
     "interpreter":      "แปลผล Lab/EKG",
     "query_agent":      "ตอบคำถาม",
     "omni_planner":     "วางแผนการทำงาน",
+    "approach_flowchart": "สร้าง Approach Mindmap",
     "revision_router":  "วิเคราะห์ feedback",
     "kb_retrieval":     "ค้น Knowledge Base",
     "drug_agent":       "ตรวจสอบยาและขนาดยา",
@@ -44,41 +50,54 @@ AGENT_LABELS: Dict[str, str] = {
     "qa_agent":         "ตรวจสอบคุณภาพรายงาน",
 }
 
-def _log_step(sid: str, agent: str, status: str, detail: str = "") -> None:
-    if not sid:
-        return
-    log = _step_log.setdefault(sid, [])
-    if status in ("done", "error") and log and log[-1]["agent"] == agent and log[-1]["status"] == "running":
-        log[-1]["status"] = status
-        if detail:
-            log[-1]["detail"] = detail
-    else:
-        log.append({"agent": agent, "label": AGENT_LABELS.get(agent, agent), "status": status, "detail": detail})
-
+# ── Role assignment ─────────────────────────────────────────────────────────────
+#
+#  claude              → orchestration + final clinical synthesis (4 agents only)
+#  gemini-thinking     → gemini-2.5-pro with extended thinking (deep DDx / QA)
+#  gemini-latest       → gemini-3.5-flash frontier (most agents — fast + smart)
+#  gemini-latest-grnd  → gemini-3.5-flash + Google Search (needs live data)
+#  gemini-flash        → gemini-2.5-flash (fast structured: format / score / route)
+#  ollama              → local — patient info never leaves the machine
+#
 AGENT_MODELS: Dict[str, str] = {
-    "navigator":         "claude",       # [อัปเกรดแล้ว] เข้าใจบริบทว่านี่คือเคส หรือแค่ประวัติสั้นๆ
-    "kb_retrieval":      "gemini-pro",   # [UPGRADE] ต้องใช้ความรู้หมอในการสกัด "คำค้นหา" (Query) จากประวัติยาวๆ
-    "pi_checker":        "ollama",       # ปล่อยไว้ (งานเซ็นเซอร์ชื่อคนไข้ เป็นงาน Pattern matching ธรรมดา)
-    "smart_router":      "claude",       # [UPGRADE] การสับรางย่อยในระบบ Revision ต้องใช้ความเข้าใจเจตนาสูงมาก
-    "source_finder":     "gemini-pro",   # [UPGRADE] เป็นตัวตัดสินว่า "เคสนี้ยากจนต้องเปิด Guideline ไหม" ต้องใช้สมองระดับ Pro
-    "reasoning_gate":    "claude",        # ย้ายจาก gemini-pro — กรรมการตัดสินตรรกะต้องการ model ที่เสถียร
-    "formatter":         "claude",       # [UPGRADE] เพื่อการันตี 100% ว่าเนื้อหา Assessment คมๆ จะไม่ถูกตัดทิ้งตอนจัดหน้า
-    "symptom_mapper":    "gemini-pro",   # [อัปเกรดแล้ว] วาง Approach อาการนำ 
-    "round_coach":       "claude",       # [UPGRADE] เก็งคำถามอาจารย์หมอ ภาษาของ Claude จะมีความเป็นมนุษย์และคล้ายอาจารย์แพทย์มากกว่า
-    "interpreter":       "gemini-pro",   # [อัปเกรดแล้ว] แปลผล Lab/EKG/ABG 
-    "researcher":        "gemini-pro",   # [UPGRADE] อ่าน Guideline หรือ Textbook ยาวๆ แล้วสรุปใจความสำคัญ Gemini Pro จะ Context window ใหญ่และแม่นยำ
-    "revision_router":   "claude",       # [UPGRADE] ตัวรับคำสั่งแก้รายงาน (เช่น "ไปเพิ่มข้อมูลยาโรคไต") Claude เก่งสุดในการแก้จุดเล็กๆ โดยไม่ทำจุดอื่นพัง
-    "analyzer":          "claude", 
-    "challenger":        "claude",
-    "professor":         "claude",
-    "report_architect":  "claude",
-    "omni_planner":      "claude",   # Branch U planner — ห้ามใช้ Gemini
-    "omni_executor":     "claude",   # Branch U step executor fallback
-    "drug_agent":        "claude",   # Drug dosing — ต้องการ precision สูง ห้าม hallucinate dose
-    "patho_agent":       "claude",   # Pathophysiology explainer — ต้องการ reasoning ลึก
-    "score_agent":       "claude",   # Clinical scoring — ต้องการ precision สูง
-    "qa_agent":          "claude",   # QA / hallucination checker — ต้องการ critical thinking
+    # ── Claude: dispatch + final synthesis only ───────────────────────────────
+    "navigator":         "claude",              # complex intent → branch dispatch
+    "omni_planner":      "claude",              # freestyle multi-step planner
+    "analyzer":          "claude",              # final clinical reasoning + synthesis
+    "reasoning_gate":    "claude",              # DDx arbitration gate
+
+    # ── Gemini 2.5 Pro (thinking): tasks needing deliberate deep reasoning ────
+    "challenger":        "gemini-thinking",     # DDx challenge — needs thinking depth
+    "qa_agent":          "gemini-thinking",     # hallucination / quality audit
+    "source_finder":     "gemini-thinking",     # judge whether guideline lookup needed
+
+    # ── Gemini 3.5 Flash (latest) + Google Search grounding ──────────────────
+    "researcher":        "gemini-latest-grnd",  # guideline / web research
+    "drug_agent":        "gemini-latest-grnd",  # dosing — grounded to live protocols
+    "interpreter":       "gemini-latest-grnd",  # lab/EKG — live reference ranges
+    "patho_agent":       "gemini-latest-grnd",  # pathophysiology + recent updates
+    "kb_retrieval":      "gemini-latest-grnd",  # RAG → web fallback
+
+    # ── Gemini 3.5 Flash (latest, no grounding): complex tasks ───────────────
+    "symptom_mapper":    "gemini-latest",       # systematic symptom approach
+    "round_coach":       "gemini-latest",       # morning round coaching
+    "professor":         "gemini-latest",       # teaching points + questions
+    "query_agent":       "gemini-latest",       # knowledge Q&A (Branch B)
+    "approach_flowchart": "gemini-latest",      # Mermaid mindmap generation (Branch C)
+
+    # ── Gemini 2.5 Flash: fast structured tasks ───────────────────────────────
+    "smart_router":      "gemini-flash",        # complexity routing decision
+    "revision_router":   "gemini-flash",        # route revision feedback
+    "formatter":         "gemini-flash",        # format final output
+    "report_architect":  "gemini-flash",        # SOAP structure planning
+    "score_agent":       "gemini-flash",        # clinical score calculation
+    "omni_executor":     "gemini-flash",        # plan step fallback executor
+
+    # ── Local: never leaves machine ───────────────────────────────────────────
+    "pi_checker":        "ollama",              # patient info anonymization
 }
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def load_prompt(agent_name: str) -> str:
     path = os.path.join("prompts", f"{agent_name}.md")
@@ -87,111 +106,162 @@ def load_prompt(agent_name: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
+
+def _log_step(sid: str, agent: str, status: str, detail: str = "") -> None:
+    if not sid:
+        return
+    log = _step_log.setdefault(sid, [])
+    if (status in ("done", "error") and log
+            and log[-1]["agent"] == agent and log[-1]["status"] == "running"):
+        log[-1]["status"] = status
+        if detail:
+            log[-1]["detail"] = detail
+    else:
+        log.append({
+            "agent": agent,
+            "label": AGENT_LABELS.get(agent, agent),
+            "status": status,
+            "detail": detail,
+        })
+
+
+# ── Claude ─────────────────────────────────────────────────────────────────────
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def _call_claude_with_retry(agent_name: str, prompt: str, system: str) -> str:
-    print(f"[router] {agent_name} (Claude): Requesting...")
+def _call_claude(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Claude/{_CLAUDE_MODEL}): Requesting...")
     response = claude.messages.create(
-        model="claude-sonnet-4-6",
+        model=_CLAUDE_MODEL,
         max_tokens=8192,
         system=system or load_prompt(agent_name),
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
 
-_GROUNDING_MODEL = "gemini-3.5-flash"
 
-def _call_gemini_researcher(prompt: str, system: str, model_name: str) -> str:
-    """Researcher: ลอง grounding 1 ครั้ง ถ้าล้มใช้ no-grounding พร้อม retry"""
+# ── Gemini 2.5 Pro — extended thinking ────────────────────────────────────────
+
+_HIGH_THINKING_AGENTS = {"challenger", "qa_agent"}
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def _call_gemini_thinking(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Gemini-thinking/{_GEMINI_THINKING_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    print(f"[router] researcher (grounding/{_GROUNDING_MODEL}): Requesting...")
-    print(f"[DEBUG] 🌐 เปิด Google Search Grounding ให้ researcher...")
+    level   = "high" if agent_name in _HIGH_THINKING_AGENTS else "medium"
+    response = gemini_client.models.generate_content(
+        model=_GEMINI_THINKING_MODEL,
+        contents=content,
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=level),
+        ),
+    )
+    return response.text
+
+
+# ── Gemini 3.5 Flash — latest frontier ────────────────────────────────────────
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+def _call_gemini_latest(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Gemini-latest/{_GEMINI_LATEST_MODEL}): Requesting...")
+    content = f"{system}\n\n{prompt}" if system else prompt
+    response = gemini_client.models.generate_content(
+        model=_GEMINI_LATEST_MODEL,
+        contents=content,
+    )
+    return response.text
+
+
+# ── Gemini 3.5 Flash + Google Search grounding ────────────────────────────────
+
+def _call_gemini_latest_grounded(agent_name: str, prompt: str, system: str) -> str:
+    """Try grounding first; graceful fallback to no-grounding."""
+    content = f"{system}\n\n{prompt}" if system else prompt
+    print(f"[router] {agent_name} (Gemini-latest+grounding/{_GEMINI_LATEST_MODEL}): Requesting...")
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
             future = ex.submit(
                 gemini_client.models.generate_content,
-                model=_GROUNDING_MODEL,
+                model=_GEMINI_LATEST_MODEL,
                 contents=content,
                 config=types.GenerateContentConfig(
                     tools=[types.Tool(google_search=types.GoogleSearch())],
-                    thinking_config=types.ThinkingConfig(thinking_level="medium"),
                 ),
             )
-            response = future.result(timeout=60)
+            response = future.result(timeout=90)
         return response.text
-    except Exception as grounding_err:
-        print(f"[DEBUG] Grounding failed ({grounding_err!r}), falling back to no-grounding...")
+    except Exception as err:
+        print(f"[router] {agent_name} grounding failed ({err!r}) — falling back")
+    return _call_gemini_latest_no_grounding(agent_name, prompt, system)
 
-    return _call_gemini_no_grounding_with_retry(prompt, system, model_name)
-
-
-_FALLBACK_MODEL = "gemini-3.5-flash"
 
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=4, max=10))
-def _call_gemini_no_grounding_with_retry(prompt: str, system: str, model_name: str) -> str:
+def _call_gemini_latest_no_grounding(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Gemini-latest/no-grounding fallback): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    fallback = _FALLBACK_MODEL if model_name in ["gemini-2.5-pro", "gemini-3.1-pro"] else model_name
-    print(f"[router] researcher (no-grounding fallback) ({fallback}): Requesting...")
     response = gemini_client.models.generate_content(
-        model=fallback, 
+        model=_GEMINI_LATEST_MODEL,
         contents=content,
-        config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_level="medium")
-        )
     )
     return response.text
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def _call_gemini_with_retry(agent_name: str, prompt: str, system: str, model_name: str) -> str:
-    print(f"[router] {agent_name} ({model_name}): Requesting...")
+# ── Gemini 2.5 Flash — fast structured tasks ──────────────────────────────────
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8))
+def _call_gemini_flash(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Gemini-flash/{_GEMINI_FLASH_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    
-    # สำหรับ Gemini 3.5 Flash เราจะใช้ Thinking Level ตามความยากของงาน
-    level = "high" if agent_name in ["source_finder", "interpreter", "symptom_mapper", "kb_retrieval"] else "medium"
-    
     response = gemini_client.models.generate_content(
-        model=model_name, 
+        model=_GEMINI_FLASH_MODEL,
         contents=content,
-        config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_level=level)
-        )
     )
     return response.text
+
+
+# ── Ollama — local privacy ─────────────────────────────────────────────────────
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def _call_ollama_with_retry(agent_name: str, prompt: str, system: str) -> str:
-    print(f"[router] {agent_name} (Ollama): Requesting...")
+def _call_ollama(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Ollama/local): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
     response = ollama.chat(
         model="qwen2.5:14b",
-        messages=[{"role": "user", "content": content}]
+        messages=[{"role": "user", "content": content}],
     )
     return response["message"]["content"]
 
+
+# ── Main dispatcher ────────────────────────────────────────────────────────────
+
+_DISPATCH = {
+    "claude":             _call_claude,
+    "gemini-thinking":    _call_gemini_thinking,
+    "gemini-latest":      _call_gemini_latest,
+    "gemini-latest-grnd": _call_gemini_latest_grounded,
+    "gemini-flash":       _call_gemini_flash,
+    "ollama":             _call_ollama,
+}
+
+
 def call_agent(agent_name: str, prompt: str, system: str = "") -> str:
-    sid = _current_session.get()
+    sid   = _current_session.get()
     _log_step(sid, agent_name, "running")
-    model = AGENT_MODELS.get(agent_name, "gemini")
+    model = AGENT_MODELS.get(agent_name, "gemini-latest")
+
+    fn = _DISPATCH.get(model)
+    if fn is None:
+        _log_step(sid, agent_name, "error", f"unknown model: {model}")
+        return f"[ERROR_MODEL_NOT_FOUND: {model}]"
 
     try:
-        if model == "claude":
-            result = _call_claude_with_retry(agent_name, prompt, system)
-        elif model == "gemini":
-            result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-3.5-flash")
-        elif model == "gemini-pro":
-            if agent_name == "researcher":
-                result = _call_gemini_researcher(prompt, system, "gemini-3.5-flash")
-            else:
-                result = _call_gemini_with_retry(agent_name, prompt, system, "gemini-3.5-flash")
-        elif model == "ollama":
+        if model == "ollama":
             try:
-                result = _call_ollama_with_retry(agent_name, prompt, system)
+                result = fn(agent_name, prompt, system)
             except Exception as e:
-                print(f"[router] {agent_name} (Ollama) error after retries: {e}")
-                result = prompt
+                print(f"[router] {agent_name} (Ollama) failed ({e}) — falling back to gemini-flash")
+                result = _call_gemini_flash(agent_name, prompt, system)
         else:
-            _log_step(sid, agent_name, "error", f"model not found: {model}")
-            return f"[ERROR_MODEL_NOT_FOUND: {model}]"
+            result = fn(agent_name, prompt, system)
     except Exception as e:
         print(f"[router] {agent_name} ({model}) error: {e}")
         _log_step(sid, agent_name, "error", str(e)[:80])

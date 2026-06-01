@@ -1,5 +1,6 @@
 import telebot
 import subprocess
+import shutil
 import time
 import re
 import os
@@ -23,16 +24,27 @@ except Exception:
 # ── Single-instance guard ─────────────────────────────────────────────────────
 _PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".obsidian_agent.pid")
 
+def _pid_alive(pid: int) -> bool:
+    """Check if a PID is alive without psutil — uses tasklist on Windows."""
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return str(pid) in result.stdout
+    except Exception:
+        return False
+
+
 def _check_single_instance():
     if os.path.exists(_PID_FILE):
         try:
             old_pid = int(open(_PID_FILE).read().strip())
-            import psutil
-            if psutil.pid_exists(old_pid):
+            if _pid_alive(old_pid):
                 print(f"[obsidian_agent] already running (PID {old_pid}). Exiting.")
                 sys.exit(0)
         except Exception:
-            pass  # stale PID file — overwrite it
+            pass  # stale or unreadable PID file — continue
     with open(_PID_FILE, "w") as f:
         f.write(str(os.getpid()))
     import atexit
@@ -46,10 +58,9 @@ _check_single_instance()
 # ==========================================
 API_TOKEN = '***REDACTED***'
 ALLOWED_USER_ID = ***REDACTED***
-GEMINI_PATH = r"C:\Users\USER\AppData\Roaming\npm\gemini.cmd"
 CASEFLOW_PATH = r"C:\Users\USER\OneDrive\Desktop\caseflow"
 VAULT_PATH = os.path.join(CASEFLOW_PATH, "obsidian")
-SESSIONS_FILE = os.path.join(CASEFLOW_PATH, "bot_sessions.json")
+GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -266,7 +277,7 @@ def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
 
         bot.send_message(
             chat_id,
-            "💬 ส่งข้อความต่อเพื่อแก้ไข | `/cfapprove` บันทึกลง vault | `/cfnew` เคสใหม่",
+            "✅ `/cfapprove` บันทึกลง vault | `/cfnew` เคสใหม่",
             parse_mode="Markdown",
         )
 
@@ -315,9 +326,6 @@ def _feedback_caseflow(user_id: str, chat_id: int, text: str):
     ).start()
 
 
-# Gemini CLI system commands (pass directly without prompt wrapping)
-system_commands = {"/tools", "/model", "/stats", "/version"}
-
 HELP_TEXT = """\
 🤖 *CaseFlow Bot*
 
@@ -333,54 +341,37 @@ Branches: A=case | B=query | C=symptom | D=progress
 `/ward <ใบส่งเวร>` — สกัด diseases/drugs แล้ว confirm สร้าง notes
 พิมพ์ `/confirm` เพื่อรัน vault builder
 
+━━━ *Vault Manager* ━━━
+`/mkdir <ชื่อ folder>` — สร้าง folder ใหม่ใน vault
+`/mv <ไฟล์> | <folder>` — ย้ายไฟล์ (หา partial name ได้)
+`/rename <ชื่อเก่า> | <ชื่อใหม่>` — เปลี่ยนชื่อ note
+`/rm <ชื่อไฟล์>` — ลบ note (ต้อง confirm)
+`/ls [folder]` — ดูโครงสร้าง หรือ list ไฟล์ใน folder
+
 ━━━ *Bot Commands* ━━━
 `/help` — แสดงคำสั่งทั้งหมด
-`/reset` — ล้าง Gemini session
+`/reset` — ล้างประวัติการคุย Gemini
 `/search <คำ>` — ค้นหาใน vault
-`/ls` — ดูโครงสร้าง vault
 `/sync` — force sync GEMINI.md
 `/gaps` — สแกน vault หา note ที่ขาด
-`/confirm` — ยืนยันรัน vault builder
+`/confirm` — ยืนยัน action
 `/cancel` — ยกเลิก pending action
 
 ━━━ *Vault Builder* ━━━
 `/run <topic>` — สร้าง note หัวข้อเดียว
 `/build <topic>` — เหมือนกัน
 
-━━━ *Gemini CLI* ━━━
-`/tools` `/model` `/stats` `/version`
-พิมพ์ข้อความธรรมดา → Gemini CLI
+พิมพ์ข้อความธรรมดา → คุยกับ Gemini
 """
 
-# เรทราคาปี 2026 (USD per 1M tokens)
-PRICING_TABLE = {
-    "gemini-3.5-flash":      {"in": 0.08,  "out": 0.35},
-    "gemini-3.1-pro-preview":{"in": 2.50,  "out": 10.00},
-    "gemini-3.1-flash":      {"in": 0.10,  "out": 0.40},
-    "gemini-1.5-flash":      {"in": 0.075, "out": 0.30},
-}
-EXCHANGE_RATE = 36.8
-
 # ==========================================
-# 2. SESSION PERSISTENCE
+# 2. CHAT STATE
 # ==========================================
-def load_sessions() -> dict:
-    if os.path.exists(SESSIONS_FILE):
-        try:
-            with open(SESSIONS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-def save_sessions(sessions: dict) -> None:
-    with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
-        json.dump(sessions, f, ensure_ascii=False, indent=2)
-
-active_sessions = load_sessions()
-
 # pending confirmation: user_id → {"topics": {type: [names]}, "json_path": str}
 pending_confirmation: dict[str, dict] = {}
+
+# Gemini chat history: user_id → list of Content objects (SDK native)
+_chat_history: dict[str, list] = {}
 
 # ==========================================
 # 3. VAULT SCANNER — auto-update GEMINI.md
@@ -488,7 +479,28 @@ def format_search_results(query: str, results: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def format_vault_structure() -> str:
+def format_vault_structure(subfolder: str = "") -> str:
+    if subfolder:
+        # list files inside a specific folder
+        target = os.path.join(VAULT_PATH, subfolder) if not os.path.isabs(subfolder) else subfolder
+        if not os.path.isdir(target):
+            # try partial match
+            for item in os.listdir(VAULT_PATH):
+                if subfolder.lower() in item.lower() and os.path.isdir(os.path.join(VAULT_PATH, item)):
+                    target = os.path.join(VAULT_PATH, item)
+                    subfolder = item
+                    break
+            else:
+                return f"❌ ไม่พบ folder `{subfolder}`"
+        files = [f for f in sorted(os.listdir(target)) if f.endswith(".md")]
+        if not files:
+            return f"📂 *{subfolder}* — ว่างเปล่า"
+        lines = [f"📂 *{subfolder}* ({len(files)} notes)\n```"]
+        for f in files:
+            lines.append(f"  {f[:-3]}")
+        lines.append("```")
+        return "\n".join(lines)
+
     folders = scan_vault_folders()
     if not folders:
         return "❌ ไม่พบ vault ที่ `obsidian/`"
@@ -498,6 +510,30 @@ def format_vault_structure() -> str:
         lines.append(f"{prefix} {folder}/  ({count})")
     lines.append("```")
     return "\n".join(lines)
+
+
+# ── Vault file management helpers ─────────────────────────────────────────────
+
+def _vault_find_files(name: str) -> list[str]:
+    """Find .md files whose stem contains `name` (case-insensitive)."""
+    q = name.lower().replace(".md", "").strip()
+    matches = []
+    for root, dirs, files in os.walk(VAULT_PATH):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            if f.endswith(".md") and q in f[:-3].lower():
+                matches.append(os.path.join(root, f))
+    return matches
+
+
+def _vault_find_folder(name: str) -> str | None:
+    """Find vault folder whose name contains `name` (case-insensitive)."""
+    q = name.lower().strip()
+    for item in sorted(os.listdir(VAULT_PATH)):
+        full = os.path.join(VAULT_PATH, item)
+        if os.path.isdir(full) and q in item.lower():
+            return full
+    return None
 
 
 # ==========================================
@@ -522,30 +558,465 @@ def clean_output(text: str) -> str:
     return text.strip()
 
 
-def calculate_dynamic_cost(stats: dict) -> tuple[float, list[str]]:
-    total_thb = 0.0
-    model_details = []
-    for m_name, m_data in stats.get("models", {}).items():
-        tokens = m_data.get("tokens", {})
-        in_t  = tokens.get("input", 0)
-        out_t = tokens.get("candidates", 0)
-        rate = PRICING_TABLE.get("gemini-1.5-flash")
-        for key in PRICING_TABLE:
-            if key in m_name.lower():
-                rate = PRICING_TABLE[key]
-                break
-        cost_usd = (in_t / 1_000_000) * rate["in"] + (out_t / 1_000_000) * rate["out"]
-        total_thb += cost_usd * EXCHANGE_RATE
-        short = m_name.split("/")[-1] if "/" in m_name else m_name
-        model_details.append(f"   └ {short}: {in_t:,}/{out_t:,} t")
-    return total_thb, model_details
+_TELEGRAM_FORMAT_INSTRUCTION = """
+## Telegram Formatting Rules
+Format ALL responses for Telegram using these rules:
+- Section headers: use *Header Name* (single asterisk, NOT ##)
+- Bold: *bold text* (single asterisk, NOT **)
+- Italic: _italic_
+- Inline code / drug names / lab values: `like this`
+- Bullet lists: use • or - as prefix
+- Tables: plain text or simple ASCII (Telegram tables don't render)
+- NO markdown headers (##, ###) — they render as raw text
+- NO horizontal rules (---)
+- Keep responses concise and structured
+"""
+
+def _load_system_prompt() -> str:
+    try:
+        with open(os.path.join(CASEFLOW_PATH, "GEMINI.md"), encoding="utf-8") as f:
+            base = f.read()
+    except Exception:
+        base = ""
+    return base + _TELEGRAM_FORMAT_INSTRUCTION
+
+
+def _fmt_telegram(text: str) -> str:
+    """Convert standard markdown → Telegram Markdown v1."""
+    # **bold** → *bold*
+    text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    # ### Header / ## Header / # Header → *Header*
+    text = re.sub(r'^#{1,6}\s+(.+)$', r'*\1*', text, flags=re.MULTILINE)
+    # Horizontal rules → blank line
+    text = re.sub(r'^-{3,}$', '', text, flags=re.MULTILINE)
+    # Collapse 3+ blank lines → 2
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def _gemini_chat(user_id: str, parts) -> str:
+    """Core chat call — parts can be str or list[Part]."""
+    if not _GEMINI_OK:
+        return "❌ Gemini API ไม่พร้อม — เช็ค GOOGLE_API_KEY ใน .env"
+    history = _chat_history.get(user_id, [])
+    try:
+        from google.genai import types as _gt
+        config = _gt.GenerateContentConfig(system_instruction=_load_system_prompt())
+        chat = _gemini.chats.create(model=GEMINI_CHAT_MODEL, history=history, config=config)
+        resp = chat.send_message(parts)
+        _chat_history[user_id] = list(chat.get_history())
+        return resp.text or "(ไม่มีข้อความตอบกลับ)"
+    except Exception as e:
+        err = str(e)
+        if "RESOURCE_EXHAUSTED" in err or "quota" in err.lower():
+            return "❌ Gemini API quota หมด — ลองใหม่ทีหลัง"
+        if "INVALID_ARGUMENT" in err or "history" in err.lower():
+            _chat_history.pop(user_id, None)
+            return f"❌ Gemini error (history cleared, ลองอีกครั้ง): {err[:150]}"
+        return f"❌ Gemini error: {err[:250]}"
+
+
+def _call_gemini(user_id: str, text: str) -> str:
+    return _gemini_chat(user_id, text)
+
+
+def _tg_download(file_id: str) -> tuple[bytes, str]:
+    """Download Telegram file → (bytes, mime_type)."""
+    info = bot.get_file(file_id)
+    url = f"https://api.telegram.org/file/bot{API_TOKEN}/{info.file_path}"
+    r = _req.get(url, timeout=60)
+    r.raise_for_status()
+    ext = info.file_path.rsplit(".", 1)[-1].lower()
+    mime_map = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+        "gif": "image/gif", "webp": "image/webp", "heic": "image/heic",
+        "pdf": "application/pdf",
+        "ogg": "audio/ogg", "oga": "audio/ogg", "opus": "audio/ogg",
+        "mp3": "audio/mpeg", "mp4": "audio/mp4", "m4a": "audio/mp4",
+        "wav": "audio/wav", "flac": "audio/flac",
+    }
+    return r.content, mime_map.get(ext, "application/octet-stream")
+
+
+_CF_PATTERNS = [
+    r'(?:ชาย|หญิง|male|female)\s*\d+\s*(?:ปี|y)',
+    r'(?:^|\s)(?:cc|chief\s*complaint)\s*:',
+    r'(?:admit(?:ted)?|dx|ddx|assessment|imp(?:ression)?)\s*:',
+    r'(?:progress|morning|ward)\s*(?:note|round)',
+    r'HN\s*:?\s*\d+',
+    r'on\s+(?:day|d)\s*\d+',
+    r'(?:vital|bp|temp|spo2|rr|hr)\s*:',
+]
+
+
+def _detect_intent(text: str):
+    """
+    Detect natural-language intent from any message.
+    Returns (action, args) or None (→ fall through to Gemini chat).
+
+    Actions: caseflow | ward | gaps | run | search | mv | mkdir | rename | rm | ls
+    """
+    t = text.strip()
+    tl = t.lower()
+
+    # ── Vault file ops ────────────────────────────────────────────────────────
+    m = re.search(r'ย้าย\s+(.+?)\s+ไป(?:ไว้)?(?:ใน)?\s+(.+)', t)
+    if m:
+        return ("mv", [m.group(1).strip(), m.group(2).strip()])
+
+    m = re.search(r'สร้าง\s+(?:folder|โฟลเดอร์)\s+(.+)', t, re.IGNORECASE)
+    if m:
+        return ("mkdir", [m.group(1).strip()])
+
+    m = re.search(r'(?:เปลี่ยนชื่อ|rename)\s+(.+?)\s+(?:เป็น|to|→|->)\s+(.+)', t, re.IGNORECASE)
+    if m:
+        return ("rename", [m.group(1).strip(), m.group(2).strip()])
+
+    m = re.search(r'^ลบ(?:\s+(?:note|ไฟล์))?\s+(.+)$', t)
+    if m:
+        return ("rm", [m.group(1).strip()])
+
+    m = re.search(r'(?:ดู|list|แสดง)\s+(?:files?\s+in\s+|ไฟล์ใน\s+)?(?:folder\s+|โฟลเดอร์\s+)?(.+)', t, re.IGNORECASE)
+    if m:
+        return ("ls", [m.group(1).strip()])
+
+    # ── Vault build (single or multi-topic) ──────────────────────────────────
+    m = re.search(r'(?:สร้าง|build|เพิ่ม|make)\s+(?:note|หัวข้อ)(?:\s+(?:เรื่อง|ว่าด้วย|เกี่ยวกับ|for|about))?\s+(.+)',
+                  t, re.IGNORECASE)
+    if m:
+        # pass raw string; _run_topics will split if comma-separated
+        return ("run", [m.group(1).strip()])
+
+    # ── Search ────────────────────────────────────────────────────────────────
+    m = re.search(r'^(?:ค้นหา|search|หา(?:ข้อมูล|เรื่อง)?)\s+(.+)', t, re.IGNORECASE)
+    if m:
+        return ("search", [m.group(1).strip()])
+
+    # ── Gap finder ────────────────────────────────────────────────────────────
+    if re.search(r'(?:gap|หัวข้อ(?:ที่)?ขาด|note(?:ที่)?ขาด|missing\s*topic)', tl):
+        return ("gaps", [])
+
+    # ── Ward handover ─────────────────────────────────────────────────────────
+    if re.search(r'(?:ส่งเวร|ใบส่งเวร|hand[\s-]?over)', tl):
+        body = re.sub(r'.{0,20}(?:ส่งเวร|ใบส่งเวร|handover)[:\s]*', '', t, count=1, flags=re.IGNORECASE).strip()
+        return ("ward", [body or t])
+
+    # ── CaseFlow (patient data detected) ─────────────────────────────────────
+    if any(re.search(p, tl) for p in _CF_PATTERNS) and len(t) > 40:
+        return ("caseflow", [t])
+
+    return None  # fall through to Gemini chat
+
+
+def _split_topics(raw: str) -> list[str]:
+    """Split comma/newline/semicolon-separated topic list → clean list."""
+    parts = re.split(r'[,;\n]+', raw)
+    return [p.strip() for p in parts if p.strip()]
+
+
+# ── Vault Builder live-progress helpers ──────────────────────────────────────
+
+_VB_STATUS_FILE = os.path.join(CASEFLOW_PATH, ".vb_status.json")
+_CF_URL_FILE    = os.path.join(CASEFLOW_PATH, ".cf_url")
+_vb_running     = False   # guard: only one vault_builder at a time
+
+
+def _build_vb_live_text(header: str, recent: list[str], start_ts: float) -> str:
+    """Compose live-progress Telegram message: progress bar + recent stdout lines."""
+    elapsed = int(time.time() - start_ts)
+    parts = [f"⏳ {header}"]
+
+    if os.path.exists(_VB_STATUS_FILE):
+        try:
+            st    = json.load(open(_VB_STATUS_FILE, encoding="utf-8"))
+            n     = st.get("current_num", 0)
+            total = st.get("total", 0)
+            cur   = st.get("current", "")
+            errs  = st.get("errors", [])
+            if total > 1:
+                pct = int(n / total * 100)
+                bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
+                parts.append(f"`[{bar}]` {pct}% ({n}/{total})")
+            if cur:
+                parts.append(f"หัวข้อ: *{cur}*")
+            if errs:
+                parts.append(f"⚠️ errors: {len(errs)}")
+        except Exception:
+            pass
+
+    if recent:
+        snippet = "\n".join(recent[-4:])
+        parts.append(f"```\n{snippet[:300]}\n```")
+
+    parts.append(f"⏱ {elapsed}s")
+    return "\n".join(parts)
+
+
+def _run_vault_background(cmd: list, chat_id: int, header_text: str, done_text: str):
+    """Start vault_builder in a background thread; edit one Telegram message live."""
+    global _vb_running
+    if _vb_running:
+        bot.send_message(chat_id, "⚠️ vault_builder กำลังรันอยู่แล้ว — รอให้เสร็จก่อน")
+        return
+    _vb_running = True
+
+    try:
+        os.remove(_VB_STATUS_FILE)
+    except Exception:
+        pass
+
+    try:
+        prog_msg = bot.send_message(
+            chat_id,
+            f"⏳ {header_text}\n`[░░░░░░░░░░]` กำลังเริ่ม...",
+            parse_mode="Markdown",
+        )
+    except Exception:
+        prog_msg = None
+
+    def _worker():
+        global _vb_running
+        try:
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, encoding="utf-8", errors="ignore",
+                bufsize=1, shell=True, cwd=CASEFLOW_PATH,
+            )
+            recent: list[str] = []
+            last_edit = 0.0
+            start_ts  = time.time()
+
+            for raw in process.stdout:
+                line = clean_ansi(raw).strip()
+                if not line:
+                    continue
+                recent.append(line)
+                if len(recent) > 8:
+                    recent.pop(0)
+                now = time.time()
+                if now - last_edit >= 3.5 and prog_msg:
+                    txt = _build_vb_live_text(header_text, recent, start_ts)
+                    try:
+                        bot.edit_message_text(
+                            txt, chat_id, prog_msg.message_id, parse_mode="Markdown"
+                        )
+                        last_edit = now
+                    except Exception:
+                        pass
+
+            process.wait()
+            elapsed = int(time.time() - start_ts)
+            update_vault_context()
+
+            if process.returncode == 0:
+                final = f"✅ {done_text} ({elapsed}s)"
+            else:
+                err_lines = "\n".join(f"`{l}`" for l in recent[-3:]) if recent else ""
+                final = f"❌ vault_builder error (exit code {process.returncode})\n{err_lines}"
+
+            if prog_msg:
+                try:
+                    bot.edit_message_text(
+                        final, chat_id, prog_msg.message_id, parse_mode="Markdown"
+                    )
+                except Exception:
+                    bot.send_message(chat_id, final, parse_mode="Markdown")
+            else:
+                bot.send_message(chat_id, final, parse_mode="Markdown")
+        finally:
+            _vb_running = False
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _run_topics(raw: str, chat_id: int):
+    """Build vault notes for one or more topics — non-blocking, live progress."""
+    topics = _split_topics(raw)
+    if not topics:
+        bot.send_message(chat_id, "⚠️ ไม่พบชื่อหัวข้อ")
+        return
+
+    if len(topics) == 1:
+        topic  = topics[0]
+        cmd    = [r".venv\Scripts\python.exe", "vault_builder.py", "--topic", topic]
+        header = f"สร้าง note: *{topic}*"
+        done   = f"สร้าง note `{topic}` เสร็จแล้ว!"
+    else:
+        classified: dict[str, list[str]] = {}
+        for t in topics:
+            cat = classify_topic(t)
+            classified.setdefault(cat, []).append(t)
+        tmp_json = os.path.join(CASEFLOW_PATH, "_run_topics_tmp.json")
+        with open(tmp_json, "w", encoding="utf-8") as f:
+            json.dump(classified, f, ensure_ascii=False, indent=2)
+        short  = ", ".join(topics[:4]) + (f" +{len(topics)-4} อื่น" if len(topics) > 4 else "")
+        cmd    = [r".venv\Scripts\python.exe", "vault_builder.py", "--from-json", tmp_json]
+        header = f"สร้าง *{len(topics)} notes*: {short}"
+        done   = f"สร้างครบ {len(topics)} notes แล้ว!"
+
+    _run_vault_background(cmd, chat_id, header, done)
+
+
+def _exec_intent(action: str, args: list, message, user_id: str):
+    """Route a detected intent to the right handler."""
+    if action == "caseflow":
+        _start_caseflow(user_id, message.chat.id, args[0])
+        return
+    if action == "run":
+        _run_topics(args[0], message.chat.id)
+        return
+    dispatch = {
+        "mv":     lambda: f"/mv {args[0]} | {args[1]}",
+        "mkdir":  lambda: f"/mkdir {args[0]}",
+        "rename": lambda: f"/rename {args[0]} | {args[1]}",
+        "rm":     lambda: f"/rm {args[0]}",
+        "ls":     lambda: f"/ls {args[0]}",
+        "search": lambda: f"/search {args[0]}",
+        "gaps":   lambda: "/gaps",
+        "ward":   lambda: f"/ward {args[0]}",
+    }
+    fn = dispatch.get(action)
+    if fn:
+        message.text = fn()
+        handle_message(message)
 
 
 # ==========================================
 # 6. MESSAGE HANDLER
 # ==========================================
+
+def _get_status_text() -> str:
+    lines = ["🖥 *CaseFlow Status*\n"]
+
+    # ── CaseFlow Server ────────────────────────────────────────────────────
+    try:
+        r = _req.get(f"{CF_API}/health", timeout=3)
+        if r.ok:
+            pub = open(_CF_URL_FILE).read().strip() if os.path.exists(_CF_URL_FILE) else ""
+            lines.append("🟢 *CaseFlow Server* — running")
+            if pub:
+                lines.append(f"   └ `{pub}`")
+            else:
+                lines.append("   └ local only (no tunnel)")
+        else:
+            lines.append("🔴 *CaseFlow Server* — error")
+    except Exception:
+        lines.append("🔴 *CaseFlow Server* — stopped")
+
+    # ── Vault Builder ──────────────────────────────────────────────────────
+    try:
+        import psutil
+        vb_running = any(
+            "vault_builder" in " ".join(p.cmdline())
+            for p in psutil.process_iter(["cmdline"])
+            if p.info["cmdline"]
+        )
+    except Exception:
+        vb_running = os.path.exists(_VB_STATUS_FILE)
+
+    if vb_running and os.path.exists(_VB_STATUS_FILE):
+        try:
+            st = json.load(open(_VB_STATUS_FILE, encoding="utf-8"))
+            cur   = st.get("current", "?")
+            ctype = st.get("current_type", "")
+            n     = st.get("current_num", 0)
+            total = st.get("total", 0)
+            done  = st.get("done", [])
+            errs  = st.get("errors", [])
+            elapsed = int(time.time() - st.get("ts", time.time()))
+            pct   = int(n / total * 100) if total else 0
+            bar   = "█" * (pct // 10) + "░" * (10 - pct // 10)
+            lines.append(f"\n⚙️ *Vault Builder* — กำลังรัน")
+            lines.append(f"   └ `[{bar}]` {pct}%  ({n}/{total})")
+            lines.append(f"   └ ตอนนี้: *{cur}* ({ctype})")
+            lines.append(f"   └ elapsed: {elapsed}s")
+            if done:
+                lines.append(f"   └ เสร็จล่าสุด: {done[-1]}")
+            if errs:
+                lines.append(f"   └ ⚠️ errors: {len(errs)}")
+        except Exception:
+            lines.append("\n⚙️ *Vault Builder* — กำลังรัน (ไม่มีข้อมูล progress)")
+    elif not vb_running:
+        lines.append("\n⬜ *Vault Builder* — stopped")
+        # แสดง error จาก run ล่าสุด (ถ้ามี)
+        if os.path.exists(_VB_STATUS_FILE):
+            try:
+                st = json.load(open(_VB_STATUS_FILE, encoding="utf-8"))
+                if st.get("errors"):
+                    lines.append(f"   └ errors จาก run ล่าสุด: {', '.join(st['errors'][:3])}")
+            except Exception:
+                pass
+
+    # ── Vault summary ──────────────────────────────────────────────────────
+    folders = scan_vault_folders()
+    total_notes = sum(c for _, c in folders)
+    lines.append(f"\n📂 *Vault*: {len(folders)} folders, {total_notes} notes")
+
+    return "\n".join(lines)
+
+
+def _send_response(chat_id: int, text: str, progress_msg_id: int | None = None):
+    """Delete progress spinner and send formatted chunks."""
+    if progress_msg_id:
+        try:
+            bot.delete_message(chat_id, progress_msg_id)
+        except Exception:
+            pass
+    text = _fmt_telegram(text)
+    chunks = [text[i:i+4000] for i in range(0, max(len(text), 1), 4000)]
+    for chunk in chunks:
+        try:
+            bot.send_message(chat_id, chunk, parse_mode="Markdown")
+        except Exception:
+            bot.send_message(chat_id, chunk)
+
+
+@bot.message_handler(
+    func=lambda m: m.from_user.id == ALLOWED_USER_ID,
+    content_types=["photo", "document", "voice", "audio", "video"],
+)
+def handle_media(message):
+    """Handle images, PDFs, voice notes → Gemini Vision/Audio."""
+    user_id = str(message.from_user.id)
+    caption = (message.caption or "").strip()
+    progress_msg = bot.reply_to(message, "⏳ กำลังวิเคราะห์...")
+    try:
+        from google.genai import types as _gt
+        ct = message.content_type
+
+        if ct == "photo":
+            file_id = message.photo[-1].file_id
+            data, mime = _tg_download(file_id)
+            prompt = caption or "วิเคราะห์รูปนี้ — ถ้าเป็น lab/EKG/film/X-ray ให้ interpret ด้วย"
+        elif ct == "document":
+            doc_mime = message.document.mime_type or ""
+            if not any(t in doc_mime for t in ("image", "pdf", "audio")):
+                bot.edit_message_text("❌ รองรับเฉพาะรูป, PDF, ไฟล์เสียง", message.chat.id, progress_msg.message_id)
+                return
+            data, mime = _tg_download(message.document.file_id)
+            if "pdf" in doc_mime:
+                mime = "application/pdf"
+            prompt = caption or "สรุปเนื้อหาของไฟล์นี้"
+        elif ct in ("voice", "audio"):
+            file_id = message.voice.file_id if ct == "voice" else message.audio.file_id
+            data, mime = _tg_download(file_id)
+            prompt = caption or "ถอดความและสรุปสิ่งที่พูด"
+        else:
+            bot.edit_message_text("❌ ไม่รองรับไฟล์ประเภทนี้", message.chat.id, progress_msg.message_id)
+            return
+
+        parts = [_gt.Part.from_bytes(data=data, mime_type=mime), _gt.Part.from_text(prompt)]
+        response_text = _gemini_chat(user_id, parts)
+        _send_response(message.chat.id, response_text, progress_msg.message_id)
+    except Exception as e:
+        try:
+            bot.edit_message_text(f"❌ Error: {e}", message.chat.id, progress_msg.message_id)
+        except Exception:
+            bot.send_message(message.chat.id, f"❌ Error: {e}")
+
+
 @bot.message_handler(func=lambda m: m.from_user.id == ALLOWED_USER_ID)
-def handle_gemini(message):
+def handle_message(message):
     user_id = str(message.from_user.id)
     query = message.text.strip()
 
@@ -650,24 +1121,33 @@ def handle_gemini(message):
         threading.Thread(target=_do_ward, daemon=True).start()
         return
 
-    # ── CaseFlow follow-up (revision / confirm) ──────────────────────────────
+    # ── CaseFlow follow-up (only while waiting for user confirmation) ──────────
+    _CONFIRM_WORDS = {"yes", "ใช่", "ยืนยัน", "รัน", "ok"}
+    _CANCEL_WORDS  = {"cancel", "ยกเลิก"}
     if user_id in cf_state and not query.startswith("/"):
         state = cf_state[user_id].get("state")
-        if state in ("done", "waiting_confirm"):
-            _feedback_caseflow(user_id, message.chat.id, query)
-            return
-        elif state == "processing":
+        if state == "processing":
             bot.reply_to(message, "⏳ CaseFlow กำลังทำงานอยู่ รอสักครู่...")
             return
+        elif state == "waiting_confirm":
+            # Vault pending_confirmation takes priority
+            is_confirm_cancel = query.lower() in (_CONFIRM_WORDS | _CANCEL_WORDS)
+            if not (is_confirm_cancel and user_id in pending_confirmation):
+                _feedback_caseflow(user_id, message.chat.id, query)
+                return
+        # state == "done" → fall through to Gemini chat (no feedback loop)
 
     # ── Bot-level commands (no subprocess) ──────────────────────────────────
     if query.lower() in ["/help", "help"]:
         bot.reply_to(message, HELP_TEXT, parse_mode="Markdown")
         return
 
+    if query.lower() in ["/status", "status", "สถานะ"]:
+        bot.reply_to(message, _get_status_text(), parse_mode="Markdown")
+        return
+
     if query.lower() in ["/reset", "clear", "เริ่มใหม่"]:
-        active_sessions.pop(user_id, None)
-        save_sessions(active_sessions)
+        _chat_history.pop(user_id, None)
         bot.reply_to(message, "🧹 ล้างประวัติการคุยเรียบร้อย เริ่มต้นใหม่ครับ")
         return
 
@@ -717,38 +1197,29 @@ def handle_gemini(message):
             bot.reply_to(message, "⚠️ ไม่มี action ที่รอยืนยัน — ลอง /gaps ก่อน")
             return
         pending = pending_confirmation.pop(user_id)
-        total = sum(len(v) for v in pending["topics"].values())
-        bot.reply_to(message, f"⚡ เริ่มสร้าง {total} notes — อาจใช้เวลานาน...")
-        cmd = ["python", "vault_builder.py", "--from-json", pending["json_path"]]
-        # รันใน subprocess ปกติ (จะ stream output กลับมา)
-        try:
-            process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="ignore",
-                bufsize=1, shell=True, cwd=CASEFLOW_PATH,
-            )
-            last_update = 0
-            full_out = ""
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                if line:
-                    clean = clean_ansi(line).strip()
-                    if clean:
-                        full_out += line
-                        if time.time() - last_update > 4.0:
-                            try:
-                                bot.send_message(message.chat.id, f"⏳ `{clean[:120]}`",
-                                                 parse_mode="Markdown")
-                                last_update = time.time()
-                            except Exception:
-                                pass
-            process.wait()
+
+        # ── confirm /rm ───────────────────────────────────────────────────────
+        if pending.get("action") == "rm":
+            deleted = []
+            for fpath in pending["files"]:
+                try:
+                    os.remove(fpath)
+                    deleted.append(os.path.basename(fpath))
+                except Exception as e:
+                    bot.send_message(message.chat.id, f"❌ ลบ `{os.path.basename(fpath)}` ไม่ได้: {e}")
             update_vault_context()
-            bot.send_message(message.chat.id, f"✅ สร้าง notes เสร็จแล้ว! ({total} topics)")
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Error: {e}")
+            names = "\n".join(f"  • `{n}`" for n in deleted)
+            bot.reply_to(message, f"🗑️ ลบแล้ว:\n{names}", parse_mode="Markdown")
+            return
+
+        total = sum(len(v) for v in pending["topics"].values())
+        src   = "gaps" if "gap" in pending.get("json_path", "") else "ward"
+        cmd   = [r".venv\Scripts\python.exe", "vault_builder.py", "--from-json", pending["json_path"]]
+        _run_vault_background(
+            cmd, message.chat.id,
+            f"สร้าง *{total} notes* (จาก {src})",
+            f"สร้าง notes เสร็จแล้ว! ({total} topics)",
+        )
         return
 
     if query.lower() in ["/cancel", "cancel", "ยกเลิก"]:
@@ -766,136 +1237,137 @@ def handle_gemini(message):
         bot.reply_to(message, format_search_results(search_q, results), parse_mode="Markdown")
         return
 
-    # ── Progress message ─────────────────────────────────────────────────────
-    progress_msg = bot.reply_to(message, "⏳ Gemini กำลังทำงาน...")
+    # ── /ls [folder] ─────────────────────────────────────────────────────────
+    ls_match = re.match(r'^/ls(?:\s+(.+))?$', query, re.IGNORECASE)
+    if ls_match:
+        folder_arg = (ls_match.group(1) or "").strip()
+        bot.reply_to(message, format_vault_structure(folder_arg), parse_mode="Markdown")
+        return
 
-    # ── Session management ───────────────────────────────────────────────────
-    if user_id not in active_sessions:
-        active_sessions[user_id] = {"id": f"user-{user_id}-{int(time.time())}", "is_new": True}
-    session_info = active_sessions[user_id]
-
-    # ── Command routing ──────────────────────────────────────────────────────
-    run_match = re.match(r'^/(run|build|สร้าง)\s+(.*)', query, re.IGNORECASE)
-
-    if run_match:
-        topic = run_match.group(2).strip()
-        cmd = ["python", "vault_builder.py", "--topic", topic]
-        bot.reply_to(message, f"⚡ กำลังสร้าง note: `{topic}`...")
-    elif query in system_commands:
-        cmd = [GEMINI_PATH, query]
-    else:
-        cmd = [
-            GEMINI_PATH,
-            "--prompt", query,
-            "--output-format", "json",
-            "--model", "gemini-3.1-pro-preview",
-        ]
-        if session_info["is_new"]:
-            cmd.extend(["--session-id", session_info["id"]])
-            session_info["is_new"] = False
+    # ── /mkdir <folder name> ──────────────────────────────────────────────────
+    mkdir_match = re.match(r'^/mkdir\s+(.+)', query, re.IGNORECASE)
+    if mkdir_match:
+        folder_name = mkdir_match.group(1).strip()
+        target = os.path.join(VAULT_PATH, folder_name)
+        if os.path.exists(target):
+            bot.reply_to(message, f"⚠️ folder `{folder_name}` มีอยู่แล้ว")
         else:
-            cmd.extend(["--resume", session_info["id"]])
+            os.makedirs(target, exist_ok=True)
+            update_vault_context()
+            bot.reply_to(message, f"✅ สร้าง folder `{folder_name}` เรียบร้อย")
+        return
 
-    # ── Subprocess ───────────────────────────────────────────────────────────
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            bufsize=1,
-            shell=True,
-            cwd=CASEFLOW_PATH,
-        )
-
-        full_raw_output = ""
-        last_update_time = 0
-
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                clean_line = clean_ansi(line).strip()
-                if clean_line:
-                    if not (clean_line.startswith("{") or clean_line.startswith("[")):
-                        print(f"[gemini] {clean_line}")
-                    full_raw_output += line
-                    if time.time() - last_update_time > 3.0:
-                        try:
-                            bot.edit_message_text(
-                                f"⏳ *กำลังประมวลผล...*\n`{clean_line[:100]}`",
-                                message.chat.id, progress_msg.message_id,
-                                parse_mode="Markdown",
-                            )
-                            last_update_time = time.time()
-                        except Exception:
-                            pass
-
-        process.wait()
-
-        # ── Session expired? → reset แล้ว retry ด้วย session ใหม่ ────────────
-        if "Invalid session identifier" in full_raw_output or "Error resuming session" in full_raw_output:
-            active_sessions.pop(user_id, None)
-            save_sessions(active_sessions)
-            active_sessions[user_id] = {"id": f"user-{user_id}-{int(time.time())}", "is_new": True}
-            session_info = active_sessions[user_id]
-            # rebuild cmd with new session
-            new_cmd = [x for x in cmd if x not in ["--resume", session_info["id"]]]
-            # replace old session flags with new ones
-            if "--session-id" not in new_cmd:
-                new_cmd.extend(["--session-id", session_info["id"]])
-                session_info["is_new"] = False
-            try:
-                bot.edit_message_text("⏳ Session หมดอายุ — เริ่มใหม่...", message.chat.id, progress_msg.message_id)
-            except Exception:
-                pass
-            process2 = subprocess.Popen(new_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                        text=True, encoding="utf-8", errors="ignore",
-                                        bufsize=1, shell=True, cwd=CASEFLOW_PATH)
-            full_raw_output = ""
-            while True:
-                line = process2.stdout.readline()
-                if not line and process2.poll() is not None:
-                    break
-                if line:
-                    full_raw_output += line
-            process2.wait()
-
-        bot.delete_message(message.chat.id, progress_msg.message_id)
-
-        # Parse JSON output
-        json_match = re.search(r'(\{.*\})', full_raw_output, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(1))
-                main_response = data.get("response", "(ไม่มีข้อความตอบกลับ)")
-                total_cost, details = calculate_dynamic_cost(data.get("stats", {}))
-                usage = (
-                    "\n\n📊 *Usage:*\n" + "\n".join(details) +
-                    f"\n💰 {total_cost:.4f} THB"
-                )
-                final_text = main_response + usage
-            except Exception:
-                final_text = clean_ansi(full_raw_output)
-        else:
-            final_text = clean_ansi(full_raw_output)
-
-        final_text = clean_output(final_text)
-        if len(final_text) > 4000:
-            for i in range(0, len(final_text), 4000):
-                bot.send_message(message.chat.id, final_text[i:i+4000])
-        else:
-            bot.send_message(message.chat.id, final_text)
-
-        # Auto-sync vault context หลังทุก subprocess call
+    # ── /mv <file> | <folder> ─────────────────────────────────────────────────
+    mv_match = re.match(r'^/mv\s+(.+?)\s*\|\s*(.+)', query, re.IGNORECASE)
+    if mv_match:
+        file_q, folder_q = mv_match.group(1).strip(), mv_match.group(2).strip()
+        found = _vault_find_files(file_q)
+        if not found:
+            bot.reply_to(message, f"❌ ไม่พบไฟล์ที่มี `{file_q}` ใน vault")
+            return
+        if len(found) > 5:
+            bot.reply_to(message, f"⚠️ พบ {len(found)} ไฟล์ — ระบุชื่อให้ชัดขึ้น")
+            return
+        dest_folder = _vault_find_folder(folder_q)
+        if not dest_folder:
+            bot.reply_to(message, f"❌ ไม่พบ folder `{folder_q}` — ใช้ /ls ดู folder ที่มี")
+            return
+        if len(found) > 1:
+            names = "\n".join(f"  • `{os.path.basename(f)}`" for f in found)
+            bot.reply_to(message,
+                f"⚠️ พบหลายไฟล์:\n{names}\n\nระบุชื่อให้ตรงขึ้น",
+                parse_mode="Markdown")
+            return
+        src = found[0]
+        dst = os.path.join(dest_folder, os.path.basename(src))
+        if os.path.exists(dst):
+            bot.reply_to(message, f"⚠️ มีไฟล์ชื่อเดียวกันใน `{os.path.basename(dest_folder)}` อยู่แล้ว")
+            return
+        shutil.move(src, dst)
         update_vault_context()
-        save_sessions(active_sessions)
+        bot.reply_to(message,
+            f"✅ ย้าย `{os.path.basename(src)}`\n→ `{os.path.basename(dest_folder)}/`",
+            parse_mode="Markdown")
+        return
 
+    # ── /rename <old> | <new> ─────────────────────────────────────────────────
+    rename_match = re.match(r'^/rename\s+(.+?)\s*\|\s*(.+)', query, re.IGNORECASE)
+    if rename_match:
+        old_q, new_name = rename_match.group(1).strip(), rename_match.group(2).strip()
+        if not new_name.endswith(".md"):
+            new_name += ".md"
+        found = _vault_find_files(old_q)
+        if not found:
+            bot.reply_to(message, f"❌ ไม่พบไฟล์ที่มี `{old_q}`")
+            return
+        if len(found) > 1:
+            names = "\n".join(f"  • `{os.path.basename(f)}`" for f in found)
+            bot.reply_to(message, f"⚠️ พบหลายไฟล์:\n{names}", parse_mode="Markdown")
+            return
+        src = found[0]
+        dst = os.path.join(os.path.dirname(src), new_name)
+        if os.path.exists(dst):
+            bot.reply_to(message, f"⚠️ มีไฟล์ `{new_name}` อยู่แล้ว")
+            return
+        os.rename(src, dst)
+        update_vault_context()
+        bot.reply_to(message,
+            f"✅ เปลี่ยนชื่อ `{os.path.basename(src)}` → `{new_name}`",
+            parse_mode="Markdown")
+        return
+
+    # ── /rm <file> — ต้อง confirm ─────────────────────────────────────────────
+    rm_match = re.match(r'^/rm\s+(.+)', query, re.IGNORECASE)
+    if rm_match:
+        file_q = rm_match.group(1).strip()
+        found = _vault_find_files(file_q)
+        if not found:
+            bot.reply_to(message, f"❌ ไม่พบไฟล์ที่มี `{file_q}`")
+            return
+        if len(found) > 3:
+            bot.reply_to(message, f"⚠️ พบ {len(found)} ไฟล์ — ระบุชื่อให้ชัดขึ้น")
+            return
+        names_str = "\n".join(f"  • `{os.path.relpath(f, VAULT_PATH)}`" for f in found)
+        pending_confirmation[user_id] = {"action": "rm", "files": found}
+        bot.reply_to(message,
+            f"⚠️ *ยืนยันลบ?*\n{names_str}\n\nพิมพ์ `/confirm` เพื่อลบถาวร | `/cancel` เพื่อยกเลิก",
+            parse_mode="Markdown")
+        return
+
+    # ── /run /build → vault_builder (single or multi-topic) ─────────────────
+    run_match = re.match(r'^/(run|build|สร้าง)\s+(.*)', query, re.IGNORECASE)
+    if run_match:
+        raw = run_match.group(2).strip()
+        _run_topics(raw, message.chat.id)
+        return
+
+    # ── Natural language — detect intent for ALL non-slash messages ──────────
+    if not query.startswith("/"):
+        intent = _detect_intent(query)
+        if intent:
+            action, args = intent
+            _exec_intent(action, args, message, user_id)
+            return
+
+    # ── Plain text / unknown slash → Gemini SDK ───────────────────────────
+    progress_msg = bot.reply_to(message, "⏳ Gemini กำลังคิด...")
+    try:
+        response_text = _fmt_telegram(_call_gemini(user_id, query))
+        try:
+            bot.delete_message(message.chat.id, progress_msg.message_id)
+        except Exception:
+            pass
+        chunks = [response_text[i:i+4000] for i in range(0, max(len(response_text), 1), 4000)]
+        for chunk in chunks:
+            try:
+                bot.send_message(message.chat.id, chunk, parse_mode="Markdown")
+            except Exception:
+                bot.send_message(message.chat.id, chunk)
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Error: {str(e)}")
+        try:
+            bot.edit_message_text(f"❌ Error: {e}", message.chat.id, progress_msg.message_id)
+        except Exception:
+            bot.send_message(message.chat.id, f"❌ Error: {e}")
 
 
 # ==========================================

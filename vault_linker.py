@@ -118,7 +118,7 @@ def add_links_to_note(content: str, links: List[str], all_notes: Dict[str, dict]
 
 # ─── KG-Based Linking (Primary — ฟรี) ───────────────────────────────────────
 
-def build_links_with_kg(vault_dir: str, kg_path: str = None):
+def build_links_with_kg(vault_dir: str, kg_path: str = None, target: str = None):
     """
     ใช้ PrimeKG เป็น evidence สำหรับหา connections
     แม่นกว่า AI + ฟรี ไม่ต้องเสีย token
@@ -135,6 +135,8 @@ def build_links_with_kg(vault_dir: str, kg_path: str = None):
     stats = {"linked": 0, "skipped": 0, "total_links": 0}
 
     for note_name, note_data in all_notes.items():
+        if target and target not in note_data["path"]:
+            continue
         # Query KG สำหรับ note นี้
         connections = kg.get_all_connections(note_name)
 
@@ -176,7 +178,7 @@ def build_links_with_kg(vault_dir: str, kg_path: str = None):
 
 # ─── AI-Based Linking (Fallback) ────────────────────────────────────────────
 
-def build_links_with_ai(vault_dir: str, delay: float = 1.0):
+def build_links_with_ai(vault_dir: str, delay: float = 1.0, target: str = None):
     """
     ส่งให้ AI วิเคราะห์ connections ระหว่าง notes
     ใช้เมื่อไม่มี PrimeKG หรือต้องการ cross-check
@@ -188,6 +190,8 @@ def build_links_with_ai(vault_dir: str, delay: float = 1.0):
     stats = {"linked": 0, "skipped": 0, "errors": 0}
 
     for note_name, note_data in all_notes.items():
+        if target and target not in note_data["path"]:
+            continue
         print(f"  🔗 Linking: {note_name}...")
 
         prompt = f"""Available notes in vault:
@@ -289,6 +293,10 @@ if __name__ == "__main__":
         "--delay", type=float, default=1.0,
         help="Delay between AI calls in seconds (for ai mode)"
     )
+    parser.add_argument(
+        "--target", type=str, default=None,
+        help="Target specific folder or file name to update (e.g., '01 - Active Cases')"
+    )
     args = parser.parse_args()
 
     if not os.path.exists(args.vault_dir):
@@ -298,17 +306,19 @@ if __name__ == "__main__":
     print(f"🔗 CaseFlow Vault Linker")
     print(f"   Vault: {args.vault_dir}")
     print(f"   Mode: {args.mode}")
+    if args.target:
+        print(f"   Target: {args.target}")
     print()
 
     if args.mode in ("kg", "both"):
         if _KG_AVAILABLE:
             print("━━━ KG-Based Linking ━━━")
-            build_links_with_kg(args.vault_dir, args.kg_path)
+            build_links_with_kg(args.vault_dir, args.kg_path, args.target)
         else:
             print("⚠️ KG not available — skipping KG mode")
 
     if args.mode in ("ai", "both"):
         print("\n━━━ AI-Based Linking ━━━")
-        build_links_with_ai(args.vault_dir, delay=args.delay)
+        build_links_with_ai(args.vault_dir, delay=args.delay, target=args.target)
 
     print("\n🎉 Linking complete!")

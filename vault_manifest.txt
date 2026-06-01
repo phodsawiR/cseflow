@@ -1,63 +1,132 @@
 obsidian\CLAUDE.md
+obsidian\Cholecystitis.md
 obsidian\MOC.md
+obsidian\Pancreatitis.md
 obsidian\Timeline Hub.md
+obsidian\acute cholecystitis.md
 obsidian\🏠 Ward Medicine Home.md
+obsidian\00 - Inbox\AcuteEncephalopathy_20260531_1339_v1.md
+obsidian\00 - Inbox\AcuteHypoxicRespiratoryFailure_20260530_2133_v1.md
+obsidian\00 - Inbox\Admission round.md
+obsidian\00 - Inbox\Advisor round.md
+obsidian\00 - Inbox\DiabeticFootInfection_20260601_1459_v1.md
+obsidian\00 - Inbox\FocalSeizureSREL_20260527_0618_v1.md
+obsidian\00 - Inbox\GIMedicationReport_20260530_1039_v1.md
+obsidian\00 - Inbox\HistoryTaking_Checklist_20260525_2339_v1.md
+obsidian\00 - Inbox\HistoryTaking_OLDCARTS_Checklist_20260525_2339_v1.md
 obsidian\00 - Inbox\Thiazolidinediones_Summary_20260522_1159_v0.md
-obsidian\02 - Diseases\lung_examination.md
+obsidian\00 - Inbox\ThyroidStormProgressNote_20260530_1846_v1.md
+obsidian\00 - Inbox\morning round.md
+obsidian\00 - Inbox\ยังไม่ได้ตั้งชื่อ.md
+obsidian\01 - Active Cases\25_05_2569.md
+obsidian\02 - Diseases\acute_cholecystitis.md
 obsidian\02 - Diseases\Cardiology\ACS.md
 obsidian\02 - Diseases\Cardiology\Atrial_Fibrillation.md
+obsidian\02 - Diseases\Cardiology\Atrioventricular_nodal_reentrant_tachycardia.md
+obsidian\02 - Diseases\Cardiology\Cardiac_syncope.md
 obsidian\02 - Diseases\Cardiology\Heart_Failure.md
+obsidian\02 - Diseases\Cardiology\Heart_Failure_(dup).md
+obsidian\02 - Diseases\Cardiology\Hypertension.md
 obsidian\02 - Diseases\Cardiology\Hypertensive_Crisis.md
 obsidian\02 - Diseases\Cardiology\Infective_Endocarditis.md
+obsidian\02 - Diseases\Cardiology\Non-ischemic_cardiomyopathy.md
+obsidian\02 - Diseases\Cardiology\Peripheral_artery_disease.md
+obsidian\02 - Diseases\Cardiology\Premature_ventricular_contraction.md
+obsidian\02 - Diseases\Cardiology\Tachycardia-bradycardia_syndrome.md
+obsidian\02 - Diseases\Dermatology\Fixed_drug_eruption.md
+obsidian\02 - Diseases\Dermatology\Paronychia.md
 obsidian\02 - Diseases\Endocrinology\DKA.md
+obsidian\02 - Diseases\Endocrinology\Dyslipidemia.md
 obsidian\02 - Diseases\Endocrinology\HHS.md
 obsidian\02 - Diseases\Endocrinology\Hypothyroidism.md
+obsidian\02 - Diseases\Endocrinology\Postprandial_hyperglycemia.md
 obsidian\02 - Diseases\Endocrinology\Thyroid_Storm.md
+obsidian\02 - Diseases\Endocrinology\Type_2_diabetes_mellitus.md
 obsidian\02 - Diseases\Gastroenterology\Acute_Pancreatitis.md
 obsidian\02 - Diseases\Gastroenterology\Cirrhosis.md
+obsidian\02 - Diseases\Gastroenterology\Transaminitis.md
 obsidian\02 - Diseases\Gastroenterology\Upper_GI_Bleeding.md
+obsidian\02 - Diseases\Gastroenterology\cholangitis.md
+obsidian\02 - Diseases\Gastroenterology\small_bowel_obstruction.md
 obsidian\02 - Diseases\General\Pain_Management.md
 obsidian\02 - Diseases\General\Pre-operative_Evaluation.md
+obsidian\02 - Diseases\Hematology\Antiphospholipid_syndrome.md
 obsidian\02 - Diseases\Hematology\Approach_to_Anemia.md
+obsidian\02 - Diseases\Hematology\Coagulopathy.md
+obsidian\02 - Diseases\Hematology\Homozygous_hemoglobin_E_disease.md
+obsidian\02 - Diseases\Hematology\Leukopenia.md
+obsidian\02 - Diseases\Hematology\Lupus_anticoagulant.md
+obsidian\02 - Diseases\Hematology\Microangiopathic_hemolytic_anemia.md
+obsidian\02 - Diseases\Hematology\Thrombotic_microangiopathy.md
 obsidian\02 - Diseases\Hematology\Transfusion_Reaction.md
+obsidian\02 - Diseases\Hematology\Von_Willebrand_disease.md
+obsidian\02 - Diseases\Immunology\Anaphylaxis.md
+obsidian\02 - Diseases\Infectious_Disease\Acinetobacter_lwoffii.md
 obsidian\02 - Diseases\Infectious_Disease\Cellulitis.md
 obsidian\02 - Diseases\Infectious_Disease\Febrile_Neutropenia.md
+obsidian\02 - Diseases\Infectious_Disease\Gram-negative_bacillary_septicemia.md
 obsidian\02 - Diseases\Infectious_Disease\Sepsis.md
+obsidian\02 - Diseases\Infectious_Disease\Sepsis_(dup).md
+obsidian\02 - Diseases\Infectious_Disease\Systemic_inflammatory_response_syndrome.md
 obsidian\02 - Diseases\Infectious_Disease\UTI.md
 obsidian\02 - Diseases\Nephrology\Acute_Kidney_Injury.md
+obsidian\02 - Diseases\Nephrology\Acute_tubular_necrosis.md
 obsidian\02 - Diseases\Nephrology\Chronic_Kidney_Disease.md
+obsidian\02 - Diseases\Nephrology\Chronic_kidney_disease_stage_3.md
 obsidian\02 - Diseases\Nephrology\Hyperkalemia.md
 obsidian\02 - Diseases\Nephrology\Hyponatremia.md
 obsidian\02 - Diseases\Nephrology\Indications_for_Dialysis.md
 obsidian\02 - Diseases\Nephrology\Urinalysis_Interpretation.md
 obsidian\02 - Diseases\Neurology\Acute_Ischemic_Stroke.md
+obsidian\02 - Diseases\Neurology\Cerebral_venous_sinus_thrombosis.md
 obsidian\02 - Diseases\Neurology\Delirium_vs_Dementia.md
 obsidian\02 - Diseases\Neurology\Meningitis.md
+obsidian\02 - Diseases\Neurology\Middle_cerebral_artery_stroke.md
+obsidian\02 - Diseases\Neurology\Multiple_system_atrophy_Parkinsonian_variant.md
 obsidian\02 - Diseases\Neurology\Status_Epilepticus.md
+obsidian\02 - Diseases\Oncology\Subcutaneous_panniculitis-like_T-cell_lymphoma.md
 obsidian\02 - Diseases\Pulmonology\AECOPD.md
 obsidian\02 - Diseases\Pulmonology\Asthma.md
+obsidian\02 - Diseases\Pulmonology\Chronic_thromboembolic_pulmonary_hypertension.md
 obsidian\02 - Diseases\Pulmonology\Community_Acquired_Pneumonia.md
+obsidian\02 - Diseases\Pulmonology\Interstitial_lung_disease.md
+obsidian\02 - Diseases\Pulmonology\Lung_abscess.md
 obsidian\02 - Diseases\Pulmonology\Pleural_Effusion.md
+obsidian\02 - Diseases\Pulmonology\Pneumonia.md
 obsidian\02 - Diseases\Pulmonology\Pneumothorax.md
 obsidian\02 - Diseases\Pulmonology\Pulmonary_Embolism.md
+obsidian\02 - Diseases\Pulmonology\Pulmonary_hypertension.md
+obsidian\02 - Diseases\Pulmonology\Severe_obstructive_sleep_apnea.md
+obsidian\02 - Diseases\Rheumatology\Localized_systemic_sclerosis.md
+obsidian\02 - Diseases\Rheumatology\Overlap_syndrome.md
+obsidian\02 - Diseases\Rheumatology\Rheumatoid_arthritis.md
+obsidian\02 - Diseases\Rheumatology\Systemic_lupus_erythematosus.md
+obsidian\03 - Drugs\Antibiotics\Amoxicillin-clavulanate.md
 obsidian\03 - Drugs\Antibiotics\Azithromycin.md
 obsidian\03 - Drugs\Antibiotics\Ceftriaxone.md
 obsidian\03 - Drugs\Antibiotics\Levofloxacin.md
 obsidian\03 - Drugs\Antibiotics\Meropenem.md
 obsidian\03 - Drugs\Antibiotics\Piperacillin-Tazobactam.md
 obsidian\03 - Drugs\Antibiotics\Vancomycin.md
+obsidian\03 - Drugs\Anticoagulants\Bemiparin.md
+obsidian\03 - Drugs\Anticoagulants\Dabigatran.md
 obsidian\03 - Drugs\Anticoagulants\Enoxaparin.md
 obsidian\03 - Drugs\Anticoagulants\Heparin.md
 obsidian\03 - Drugs\Anticoagulants\Warfarin.md
 obsidian\03 - Drugs\Cardiovascular\Adenosine.md
 obsidian\03 - Drugs\Cardiovascular\Adrenaline.md
 obsidian\03 - Drugs\Cardiovascular\Amiodarone.md
+obsidian\03 - Drugs\Cardiovascular\Aspirin.md
+obsidian\03 - Drugs\Cardiovascular\Iloprost.md
 obsidian\03 - Drugs\Cardiovascular\Nicardipine.md
 obsidian\03 - Drugs\Cardiovascular\Norepinephrine.md
 obsidian\03 - Drugs\Diuretics\Furosemide.md
 obsidian\03 - Drugs\Endocrine\Insulin_Drip.md
+obsidian\03 - Drugs\Endocrine\Potassium_iodide.md
+obsidian\03 - Drugs\Endocrine\Propylthiouracil.md
 obsidian\03 - Drugs\Gastrointestinal\Octreotide.md
 obsidian\03 - Drugs\Gastrointestinal\Omeprazole.md
+obsidian\03 - Drugs\Immunosuppressants\Cyclosporine_A.md
 obsidian\03 - Drugs\Neurology\Diazepam.md
 obsidian\03 - Drugs\Neurology\Lorazepam.md
 obsidian\03 - Drugs\Neurology\Phenytoin.md
@@ -70,23 +139,61 @@ obsidian\03 - Drugs\Thrombolytics\Alteplase.md
 obsidian\04 - Labs\ABG_Interpretation.md
 obsidian\04 - Labs\CBC_Pattern.md
 obsidian\04 - Labs\Coagulation_Profile.md
+obsidian\04 - Labs\Electrolyte_imbalance.md
 obsidian\04 - Labs\LFT_Pattern.md
 obsidian\07 - Procedures\Arterial_Blood_Gas.md
+obsidian\07 - Procedures\Capillary_puncture.md
+obsidian\07 - Procedures\Hand_washing_techniques.md
 obsidian\07 - Procedures\Lumbar_Puncture.md
 obsidian\07 - Procedures\NG_Tube_Insertion.md
 obsidian\07 - Procedures\Paracentesis.md
 obsidian\07 - Procedures\Thoracentesis.md
+obsidian\07 - Procedures\Urethral_catheterization.md
+obsidian\07 - Procedures\Venipuncture.md
+obsidian\07 - Procedures\Venipuncture_(hemoculture).md
+obsidian\08 - Approaches\Abdominal_pain_approach.md
+obsidian\08 - Approaches\Alteration_of_consciousness_neuro_approach.md
+obsidian\08 - Approaches\Alteration_of_consciousness_toxico_approach.md
 obsidian\08 - Approaches\Altered_Consciousness.md
+obsidian\08 - Approaches\Anemia_approach.md
 obsidian\08 - Approaches\Approach_to_On_Call.md
 obsidian\08 - Approaches\Approach_to_Ward_Call.md
+obsidian\08 - Approaches\Approach_to_oliguria_approach.md
+obsidian\08 - Approaches\Bleeding_disorder_approach.md
 obsidian\08 - Approaches\Chest_Pain.md
+obsidian\08 - Approaches\Chest_pain_approach.md
+obsidian\08 - Approaches\Cough_approach.md
 obsidian\08 - Approaches\Dyspnea.md
+obsidian\08 - Approaches\Dyspnea_approach.md
+obsidian\08 - Approaches\Edema_approach.md
 obsidian\08 - Approaches\Fever.md
+obsidian\08 - Approaches\Headache_approach.md
+obsidian\08 - Approaches\Hematuria_approach.md
+obsidian\08 - Approaches\Hemoptysis_approach.md
 obsidian\08 - Approaches\Hyperkalemia_Approach.md
 obsidian\08 - Approaches\Hyponatremia_Approach.md
 obsidian\08 - Approaches\Jaundice.md
+obsidian\08 - Approaches\Jaundice_approach.md
+obsidian\08 - Approaches\Joint_pain_approach.md
 obsidian\08 - Approaches\Leg_Edema.md
+obsidian\08 - Approaches\Origin_approach.md
+obsidian\08 - Approaches\Pleuritic_chest_pain_approach.md
+obsidian\08 - Approaches\Polyuria_approach.md
+obsidian\08 - Approaches\Seizure_and_epilepsy_approach.md
+obsidian\08 - Approaches\Syncope_approach.md
 obsidian\08 - Approaches\Upper_GI_Bleed.md
+obsidian\08 - Approaches\Weakness_approach.md
+obsidian\09 - Examination\abdominal_examination.md
+obsidian\09 - Examination\cardiovascular_examination.md
+obsidian\09 - Examination\extremities_examination.md
+obsidian\09 - Examination\general_appearance_examination.md
+obsidian\09 - Examination\heent_examination.md
+obsidian\09 - Examination\lung_examination.md
+obsidian\09 - Examination\musculoskeletal_examination.md
+obsidian\09 - Examination\neurological_examination.md
+obsidian\09 - Examination\pulmonary_examination.md
+obsidian\09 - Examination\skin_and_appendages_examination.md
+obsidian\09 - Examination\vital_signs_examination.md
 obsidian\99 - Templates\Procedure Template.md
 obsidian\99 - Templates\Template - Case.md
 obsidian\99 - Templates\Template - Disease.md
@@ -95,6 +202,8 @@ obsidian\99 - Templates\Template - Film.md
 obsidian\99 - Templates\Template - Freestyle.md
 obsidian\99 - Templates\Template - Guideline.md
 obsidian\99 - Templates\Template - Lab.md
+obsidian\Excalidraw\Drawing 2026-05-25 09.42.46.excalidraw.md
+obsidian\Excalidraw\Drawing 2026-05-25 09.45.58.excalidraw.md
 obsidian\copilot\copilot-custom-prompts\Clip Web Page.md
 obsidian\copilot\copilot-custom-prompts\Clip YouTube Transcript.md
 obsidian\copilot\copilot-custom-prompts\Emojify.md
