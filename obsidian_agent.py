@@ -56,11 +56,15 @@ _check_single_instance()
 # ==========================================
 # 1. CONFIGURATION
 # ==========================================
-API_TOKEN = '***REDACTED***'
-ALLOWED_USER_ID = ***REDACTED***
+API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+ALLOWED_USER_ID = int(os.getenv('TELEGRAM_USER_ID', '0'))
 CASEFLOW_PATH = r"C:\Users\USER\OneDrive\Desktop\caseflow"
 VAULT_PATH = os.path.join(CASEFLOW_PATH, "obsidian")
 GEMINI_CHAT_MODEL = "gemini-2.5-flash"
+
+if not API_TOKEN:
+    print("[ERROR] TELEGRAM_BOT_TOKEN not set in .env")
+    sys.exit(1)
 
 bot = telebot.TeleBot(API_TOKEN)
 
