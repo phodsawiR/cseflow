@@ -1,0 +1,29 @@
+{
+  "diseases": [
+    "HIV infection",
+    "Type 2 diabetes mellitus",
+    "Aortic dissection",
+    "Pulmonary embolism",
+    "Systemic lupus erythematosus",
+    "Autoimmune hemolytic anemia",
+    "Herpes simplex virus infection",
+    "Catheter-related bloodstream infection",
+    "Pleural effusion",
+    "Opioid overdose",
+    "G6PD deficiency",
+    "Vitamin B12 deficiency",
+    "Scrub typhus",
+    "Cerebral toxoplasmosis",
+    "Gonococcal arthritis",
+    "Aplastic anemia",
+    "Mitral stenosis",
+    "Avascular necrosis of femoral head",
+    "Exogenous Cushing syndrome",
+    "Emphysematous pyelonephritis",
+    "Allergic rhinitis",
+    "Wilson disease",
+    "von Willebrand disease",
+    "Methanol poisoning",
+    "Hereditary angioedema"
+  ]
+}

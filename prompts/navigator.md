@@ -66,6 +66,14 @@ input เป็นการตีกลับ draft report เพื่อแก
 
 ## Step 2 — Detect Branch (full mode เท่านั้น)
 
+**[PRIORITY 0: ExamFlow — ตรวจก่อนทุก branch]**
+- **Branch G6 (สอบพรุ่งนี้):** "สอบพรุ่งนี้", "ultra summary", "5 จุดหลัก", "สรุปสั้น"
+- **Branch G2 (Exam Analysis):** "วิเคราะห์ข้อสอบ", "ออกซ้ำ", "เก็งข้อ", "distractor", "pattern ข้อสอบ"
+- **Branch G4 (Vignette):** "ออกโจทย์", "ฝึกทำ", "จำลองข้อสอบ", "สร้าง MCQ", "practice question"
+- **Branch G5 (Gap Detector):** "ยังขาดอะไร", "อ่านครบมั้ย", "vault check", "gap detector"
+- **Branch G3 (Disease Summary):** "สรุปสำหรับสอบ", "สรุปเรื่อง", "ต้องรู้อะไรบ้าง" + context สอบ, หรือ "สรุป [โรค]" + มีคำว่า "สอบ/ข้อสอบ/exam"
+- **Branch G1 (Scope Query):** "scope สอบ", "อ่านอะไรก่อนสอบ", "EKG ที่ต้องรู้", "guideline อะไร" + context สอบ
+
 **[PRIORITY 1: บังคับสับรางทันทีเมื่อเจอ Keyword/Intent]**
 - **Branch G (Admission Note Builder):** "เขียนใบขาว", "admission note", "รายงานผู้ป่วย", "เขียนรายงาน", "ทำใบขาว"
 - **Branch D (Progress Note Builder):** "เขียนใบเหลือง", "progress note", "เขียน note", "SOAP", "สรุปอาการรายวัน"
@@ -142,6 +150,17 @@ Output:
 ```
 professor เพิ่มถ้า directive ระบุ หรือ case conference
 
+### Branch G1–G6 — ExamFlow
+```json
+"agents_needed": ["examflow_scope|examflow_pattern|examflow_disease|examflow_gap", "examflow_grounding"]
+```
+G1: scope_mapper + grounding_gate
+G2: pattern_finder + distractor_analyzer + grounding_gate (parallel)
+G3: disease_architect + grounding_gate + obsidian_formatter
+G4: vignette_writer + grounding_gate
+G5: gap_detector + grounding_gate
+G6: disease_architect (compact mode) + grounding_gate
+
 ### Branch G — Admission Note Builder (ใบขาว)
 ```json
 "agents_needed": [
@@ -213,6 +232,8 @@ kb_builder    → "หา guideline ใหม่", "update KB"
 - output JSON เท่านั้น ห้าม markdown หรือ prose นอก JSON
 - ถ้า mode ไม่ชัด → "followup"
 - ถ้า branch ไม่ชัดใน full mode → "A"
+- ExamFlow branches (G1–G6): ตรวจ PRIORITY 0 ก่อนเสมอ ก่อนดู clinical context
+- Branch G (Admission Note) ≠ G1–G6 — ต้องมีคำชัดเจน "ใบขาว/admission note" เท่านั้น
 - patient_data ต้องไม่มี directives ปน
 - directives ที่ไม่มี target → parallel_tasks
 - followup และ revision → branch: null

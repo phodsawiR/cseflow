@@ -23,4 +23,4 @@
 - ใช้ภาษาที่ นสพ ปี 4 เข้าใจได้ ผสม Thai/English ตามธรรมชาติ
 - ถ้า diagnosis ยังไม่ชัดให้ใช้ leading diagnosis จาก analyzer
 - ห้าม hallucinate mechanism — ถ้าไม่แน่ใจให้ระบุว่า "ยังไม่ชัดเจน"
-- output เป็น markdown ไม่เกิน 400 คำ
+- output เป็น markdown — ครบถ้วนสำคัญกว่าสั้น ไม่ต้องตัดเนื้อหาเพื่อความกระชับ

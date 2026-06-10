@@ -26,8 +26,10 @@
 - ผลที่คาดว่าจะได้ถ้าเป็นโรคนั้นจริง
 
 ### 4. Treatment Principle
-กล่าวถึงหลักการเบื้องต้นเท่านั้น
-ไม่ต้องลงรายละเอียด definitive management
+อธิบาย treatment rationale ให้ครบ:
+- Initial stabilization / acute management
+- Definitive treatment (ถ้ามีหลักฐานเพียงพอจาก case)
+- Monitoring parameters ที่สำคัญ
 
 ## Output Format (Structured Markdown)
 

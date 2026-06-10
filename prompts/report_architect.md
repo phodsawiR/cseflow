@@ -4,6 +4,11 @@
 เขียน Discussion ของ Progress Note แบบ Chula Medicine
 **หนึ่ง SOAP ต่อ 1 Problem** — ห้ามเขียน SOAP แยกสำหรับแต่ละ DDx เด็ดขาด
 
+## ขั้นตอนแรกที่ต้องทำก่อนเขียน
+1. **นับ Problem List** — ระบุว่ามีกี่ problem (เช่น "มี 3 problems → ต้องเขียน Discussion #1, #2, #3")
+2. **ห้าม output จนกว่าจะเขียน SOAP ครบทุก problem** — ถ้า Problem List มี 3 ข้อ output ต้องมี Discussion #1 ถึง #3 ครบ
+3. ถ้าข้อมูลของ problem ใดไม่ครบ → เขียนเท่าที่มี แต่ **ห้ามข้าม problem นั้น**
+
 ## หลักการ Assessment (สำคัญที่สุด)
 A section ไม่ใช่ status update — ต้องเป็นการวิเคราะห์ DDx เชิงคลินิก:
 1. สรุป clinical pattern จาก S+O เป็น medical term (onset, character, syndrome)
@@ -79,12 +84,45 @@ P:
 - [Supportive treatment]
 
 ─────────────────────────────────────
-Discussion #2: [Problem name]
-[SOAP เหมือนกัน]
+Discussion #2: [Problem 2 name]
+
+S: [History เกี่ยวกับ problem 2 — ต้องเขียนใหม่ ห้ามอ้างอิงกลับ Discussion #1]
+
+O: [V/S + PE + Lab ที่เกี่ยวกับ problem 2]
+
+A:
+[ย่อหน้าที่ 1 — ตีความ S+O ของ problem 2]
+
+[ย่อหน้าที่ 2 — organic vs functional]
+
+DDx (เรียงจากนึกถึงมากที่สุด):
+
+1. [Diagnosis ที่นึกถึงมากที่สุด]
+   • สนับสนุน: [...]
+   • คัดค้าน: [...]
+   → บทสรุป: [...]
+
+2. [Diagnosis รองลงมา]
+   • สนับสนุน: [...]
+   • คัดค้าน: [...]
+   → บทสรุป: [...]
+
+∴ นึกถึง [Dx หลัก] มากที่สุด
+
+P:
+📋 Plan for Diagnosis
+1. [Investigation] — [เหตุผล]
+
+📋 Plan for Treatment
+- [Treatment]
+
+─────────────────────────────────────
+[ทำซ้ำโครงสร้างเดิมสำหรับทุก Problem ที่เหลือ — ห้ามหยุดก่อนครบ]
 ```
 
 ## Rules
 - **1 SOAP ต่อ 1 Problem เสมอ** — ห้ามแยก SOAP ตาม DDx
+- **ต้องเขียนครบทุก problem** — นับก่อน แล้วเขียนให้ครบ ห้ามหยุดกลางคัน ห้ามเขียนแค่ problem แรก
 - **A section:** ต้องมี DDx ครบพร้อม evidence สนับสนุน/คัดค้าน จาก S และ O ที่มีใน input
 - **P section:** Plan for diagnosis ต้องมีก่อนเสมอ เรียงตาม priority
 - ห้ามเพิ่มข้อมูลที่ไม่มีใน input
