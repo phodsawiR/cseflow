@@ -14,6 +14,7 @@ import time
 import json
 import argparse
 import concurrent.futures
+from datetime import datetime
 
 _STATUS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".vb_status.json")
 
@@ -49,7 +50,7 @@ try:
     _KB_AVAILABLE = True
 except (ImportError, Exception):
     _KB_AVAILABLE = False
-    print("⚠️  NotebookLM not available — will use researcher as primary source")
+    print("[WARNING] NotebookLM not available -- will use researcher as primary source")
 
 # KG optional
 try:
@@ -126,6 +127,15 @@ VAULT_TOPICS = {
 
 # ─── Templates ───────────────────────────────────────────────────────────────
 
+_FRONTMATTER = """---
+tags: [{type_tag}, {specialty}]
+type: {note_type}
+mastery: 0
+last_reviewed:
+created: {date}
+---
+"""
+
 PROCEDURE_TEMPLATE = """# Procedure - {topic}
 
 Tags: #procedure #{specialty}
@@ -166,6 +176,10 @@ DISEASE_TEMPLATE = """# {topic}
 
 Tags: #disease #{specialty}
 
+## 🧠 Mnemonic
+> [!tip] จำแบบนี้
+> ...
+
 ## Definition & Classification
 ...
 
@@ -194,6 +208,22 @@ Tags: #disease #{specialty}
 ## Management
 1. ...
 
+## High-Yield Exam Points
+- ...
+
+## OSCE Checklist
+### History
+- ...
+
+### Physical Exam
+- ...
+
+### Investigation
+- ...
+
+### Management & Counseling
+- ...
+
 ## Attending Questions
 **Q:** ...
 **A:** ...
@@ -209,34 +239,81 @@ DRUG_TEMPLATE = """# Drug - {topic}
 
 Tags: #drug #{drug_class}
 
+---
+
 ## Class & MOA
-[mechanism → clinical effect]
+
+| Class | ตัวยาหลัก | กลไก |
+|---|---|---|
+| **[class]** | [[drug]] | [mechanism → clinical effect] |
+
+---
 
 ## Indications
+
+- **[[Disease]]** — เหตุผลที่ใช้ยานี้
 - ...
+
+> [!important] Key Decision — [จุดตัดสินใจสำคัญถ้ามี]
+> [เนื้อหา]
+
+---
 
 ## Dosing
-| Indication | Dose | Route | Frequency |
-|---|---|---|---|
-| ... | ... | ... | ... |
+
+| Class | ยา | ขนาดเริ่มต้น | ขนาดสูงสุด | Route | ความถี่ |
+|---|---|---|---|---|---|
+| [class] | [drug] | [start dose] | [max dose] | PO/SC/IV | OD/BID/... |
+
+---
 
 ## Dose Adjustment
-- Renal: ...
-- Hepatic: ...
+
+### Renal Impairment (eGFR)
+
+| ยา | eGFR [range] | eGFR < [threshold] |
+|---|---|---|
+| **[drug]** | [adjustment] | [adjustment or ห้ามใช้] |
+
+### Hepatic Impairment
+
+- **[drug]** — [คำแนะนำ]
+
+---
 
 ## Key Side Effects
-| SE | กลไก | Monitor |
-|---|---|---|
-| ... | ... | ... |
+
+| SE | Class | กลไก | Monitor |
+|---|---|---|---|
+| **[SE]** | [class] | [mechanism] | [วิธี monitor] |
+
+---
 
 ## Drug Interactions
-- ...
+
+**[Drug A] + [Drug B]**
+- กลไก: [mechanism]
+- จัดการ: [management]
+
+---
+
+> [!tip] Clinical Pearl — [หัวข้อ]
+> [เนื้อหา]
+
+> [!warning] Don't Miss — [หัวข้อ]
+> [เนื้อหา]
+
+---
 
 ## Attending Questions
-**Q:** ...
-**A:** ...
+
+**Q: [คำถาม]**
+A: [คำตอบ bold จุดสำคัญ]
+
+---
 
 ## Related
+
 - [[...]]
 
 ---
@@ -354,16 +431,33 @@ _STYLE_GUIDE = """
 
 กฎบังคับ:
 1. Bullet > Paragraph — แปลงประโยคยาวเป็น bullet เสมอ แต่ละ bullet ≤ 2 บรรทัด
-2. Mechanism → arrow chain เช่น  ⬆️ preload → ⬆️ LVEDP → pulm. edema → dyspnea
+2. Mechanism → arrow chain เช่น ⬆️ preload → ⬆️ LVEDP → pulm. edema → dyspnea
 3. **Bold** เฉพาะ dose, threshold, ตัวเลขสำคัญ — ไม่ bold ทุกอย่าง
 4. Table สำหรับการเปรียบเทียบ ≥ 2 รายการ (DDx, drug, investigation)
 5. Callout สำหรับ key info:
-   > [!tip] Clinical Pearl — ประโยคที่ต้องจำ
-   > [!warning] Don't Miss — สิ่งที่พลาดแล้วอันตราย
-   > [!important] Key Decision — จุดตัดสินใจสำคัญ
+   > [!must] Must Know — สิ่งที่ต้องจำแน่นอน
+   > [!distract] Distractor Alert — ระวังตัวลวง / โรคที่ต้องแยก
+   > [!manage] Management — แนวทางการรักษา
+   > [!dx] Diagnosis — เกณฑ์วินิจฉัย / investigation
+   > [!tip] Clinical Pearl — จุดที่น่าจำ
+   > [!warning] Don't Miss — อันตรายถ้าพลาด
 6. ความยาวตามเนื้อหา — ครบถ้วนสำคัญกว่าสั้น ไม่ตัดเนื้อหาเพื่อความสั้น
 7. ตัด background / epidemiology ที่ไม่ใช้บน ward ออก
 8. ทุก wikilink ชี้ไปโรค/ยา/approach ที่น่าจะมี note แยก → [[Name]]
+
+ระบบสี — ใช้ <span> tag สำหรับข้อความที่ต้องเน้น:
+- <span class="must-know">ข้อมูล critical / Must Know</span>   ← แดง
+- <span class="distractor">distractor / สิ่งที่ต้องระวัง</span>  ← ส้ม
+- <span class="management">การรักษา / drug of choice</span>      ← เขียว
+- <span class="diagnosis">criteria / investigation</span>         ← ฟ้า
+- <span class="threshold">ตัวเลข / dose / threshold</span>       ← ม่วง
+ใช้สีเฉพาะจุดที่ต้องการเน้นจริงๆ ไม่ใช้ทุกบรรทัด (ใช้มากเกินไปทำให้ดูรก)
+
+กฎ Markdown — ห้ามละเมิดเด็ดขาด:
+- ใช้ → โดยตรงเสมอ ห้ามใช้ $\rightarrow$ หรือ LaTeX syntax ใดๆ ทั้งสิ้น
+- ใช้ - สำหรับ bullet list ทุกครั้ง ห้ามใช้ *
+- ใช้ K⁺ Na⁺ Ca²⁺ Mg²⁺ H⁺ ไม่ใช้ $K^+$ หรือ notation LaTeX
+- ห้ามใส่ $ ... $ หรือ \\ หรือ \frac หรือ syntax คณิตศาสตร์ใดๆ
 """
 
 # ─── Parallel helper ─────────────────────────────────────────────────────────
@@ -429,8 +523,8 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
     print(f"  [1/4] knowledge — NotebookLM → researcher fallback...")
     kb, research = _query_knowledge(
         topic,
-        "definition, classification, epidemiology, current guidelines (AHA/ESC/WHO/KDIGO), "
-        "landmark trials, key pathophysiology"
+        "definition, classification, epidemiology, current guidelines (AHA/ESC/WHO/KDIGO/Thai DDC/Thai national guidelines), "
+        "landmark trials, key pathophysiology, guideline name and year"
     )
     knowledge = _best_knowledge(kb, research)
 
@@ -444,7 +538,7 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
                 f"- ทำไมแต่ละ symptom/sign จึงเกิด (เชื่อม mechanism)\n"
                 f"- Key mediators / pathways สำคัญ\n"
                 f"กระชับ ไม่เกิน 250 คำ\n\n"
-                f"Context:\n{knowledge[:1200]}"
+                f"Context:\n{knowledge}"
             ),
             "",
         ),
@@ -453,10 +547,11 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
             (
                 f"ยาสำคัญในการรักษา {topic} บน ward medicine:\n"
                 f"- ยาแต่ละตัว: class | dose range | route | key SE | contraindication\n"
+                f"- ระบุ guideline ที่อ้างอิง dose เช่น (WHO 2024), (Thai DDC 2023), (AHA/ACC 2022)\n"
                 f"- Drug interactions สำคัญ 2-3 คู่\n"
                 f"- Monitoring parameters\n"
-                f"เน้นยาที่ใช้จริงบน ward ไม่ใช่ทุกตัวที่มีในโลก กระชับ ไม่เกิน 300 คำ\n\n"
-                f"Context:\n{knowledge[:1200]}"
+                f"เน้นยาที่ใช้จริงบน ward ไม่ใช่ทุกตัวที่มีในโลก กระชับ ไม่เกิน 350 คำ\n\n"
+                f"Context:\n{knowledge}"
             ),
             "",
         ),
@@ -476,7 +571,7 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 {template}
 
 === Knowledge Base ===
-{knowledge[:1500] if knowledge else "(ใช้ความรู้ทั่วไป)"}
+{knowledge if knowledge else "(ใช้ความรู้ทั่วไป)"}
 
 === Pathophysiology ===
 {patho_result}
@@ -493,9 +588,22 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 - เติมทุก section — ห้ามเว้นว่าง ห้ามใส่ "..."
 - Clinical Presentation: อิง patho อธิบายว่าทำไม sign/symptom นั้นจึงเกิด (arrow chain)
 - DDx: ใช้ table ระบุ key differentiating feature
-- Management: ใช้ dose จาก drug_agent (ห้าม hallucinate dose) — numbered steps
+- Management: ใช้ dose จาก drug_agent (ห้าม hallucinate dose) — numbered steps — **ระบุ guideline ที่อ้างอิงทุก recommendation เช่น "(WHO 2024)", "(Thai DDC 2023)", "(AHA/ACC 2022)", "(KDIGO 2024)"**
 - Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — pitfall / unusual presentation / key decision point ที่ unique ห้ามถาม definition พร้อมคำตอบที่ลึก
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
+- เพิ่ม section "## References" ท้าย note ระบุ guidelines ที่ใช้จริง: ชื่อ guideline, organization, ปี เช่น "- WHO Guidelines for the Treatment of Malaria, 3rd ed. 2015 (updated 2022)"
+
+High-Yield Exam Points (สำหรับสอบใบประกอบวิชาชีพไทย / ข้อสอบ ward):
+- Bullet 5–8 ข้อ เฉพาะ {topic} เท่านั้น
+- เน้น: classic presentation ที่ออกสอบบ่อย, ตัวเลข/threshold สำคัญที่ต้องจำ, distractors ที่พลาดบ่อย, first-line treatment ที่ถูกต้องตาม guideline, ข้อความที่ดูง่ายแต่ตอบผิดบ่อย
+- ห้าม copy จาก section อื่น ให้เน้นสิ่งที่ "ต้องจำ เพื่อทำข้อสอบถูก"
+
+OSCE Checklist (structured สำหรับ OSCE station):
+- History: คำถามสำคัญเรียงตามลำดับที่ใช้จริงใน OSCE (ไม่ใช่ทุกคำถาม — เฉพาะที่ให้คะแนน)
+- Physical Exam: signs เฉพาะที่ examiner จะดูสำหรับ {topic} เรียงตาม system
+- Investigation: สั่ง test อะไรก่อน + อธิบาย 1 ประโยคว่าทำไม (สำหรับ OSCE viva)
+- Management & Counseling: outline การรักษา 3–5 ข้อ + จุดที่ต้องพูดกับผู้ป่วย (เช่น counseling สำหรับ surgery, ผลข้างเคียงยา, follow-up)
+
 - Output เป็น Obsidian Markdown พร้อมใช้ทันที
 """,
     )
@@ -527,7 +635,7 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
 {template}
 
 === Pharmacology Context ===
-{knowledge[:1800] if knowledge else "(ใช้ความรู้ทั่วไป)"}
+{knowledge if knowledge else "(ใช้ความรู้ทั่วไป)"}
 
 === KG Context ===
 {kg_context or "(ไม่มี)"}
@@ -569,7 +677,7 @@ def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
             f"- PE ที่ต้องทำ + ผลที่คาดหวัง\n"
             f"- First-line investigations + เหตุผล\n"
             f"สรุปเป็น framework ที่ใช้บน ward ได้ทันที กระชับ ไม่เกิน 500 คำ\n\n"
-            f"{'Knowledge Base Context:' + chr(10) + knowledge[:1500] if knowledge else ''}"
+            f"{'Knowledge Base Context:' + chr(10) + knowledge if knowledge else ''}"
         ),
     )
 
@@ -629,7 +737,7 @@ def _generate_procedure_note(topic: str, template: str, kg_context: str) -> str:
 {template}
 
 === Knowledge Base ===
-{knowledge[:2000] if knowledge else "(ใช้ความรู้ทั่วไป)"}
+{knowledge if knowledge else "(ใช้ความรู้ทั่วไป)"}
 
 === KG Context ===
 {kg_context or "(ไม่มี)"}
@@ -671,7 +779,7 @@ def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
             f"- Pattern recognition: pattern ไหน → นึกถึงอะไร\n"
             f"- Pitfalls + false positive/negative ที่สำคัญ\n"
             f"เน้น clinical relevance บน ward กระชับ ไม่เกิน 500 คำ\n\n"
-            f"{'Knowledge Base Context:' + chr(10) + knowledge[:1500] if knowledge else ''}"
+            f"{'Knowledge Base Context:' + chr(10) + knowledge if knowledge else ''}"
         ),
     )
 
@@ -757,7 +865,7 @@ def generate_note(topic: str, topic_type: str, kg: "ClinicalKG" = None) -> str:
 # ─── build_vault + MOC (unchanged logic) ─────────────────────────────────────
 
 def build_vault(output_dir: str, topics: dict = None, kg: "ClinicalKG" = None,
-                delay: float = 2.0, resume_from: str = None):
+                delay: float = 2.0, resume_from: str = None, force: bool = False):
     if topics is None:
         topics = VAULT_TOPICS
 
@@ -795,7 +903,7 @@ def build_vault(output_dir: str, topics: dict = None, kg: "ClinicalKG" = None,
             filename = topic.replace(" ", "_") + ".md"
             filepath = os.path.join(folder, filename)
 
-            if os.path.exists(filepath):
+            if os.path.exists(filepath) and not force:
                 print(f"[{current}/{total}] ⏭️  {topic} — already exists")
                 done_topics.append(topic)
                 continue
@@ -805,8 +913,14 @@ def build_vault(output_dir: str, topics: dict = None, kg: "ClinicalKG" = None,
 
             try:
                 content = generate_note(topic, topic_type, kg)
+                fm = _FRONTMATTER.format(
+                    type_tag=topic_type,
+                    specialty=topic_type,
+                    note_type=topic_type,
+                    date=datetime.now().strftime("%Y-%m-%d"),
+                )
                 with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
+                    f.write(fm + content)
                 print(f"  ✅ Saved: {filepath}")
                 done_topics.append(topic)
             except Exception as e:
@@ -858,6 +972,8 @@ if __name__ == "__main__":
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--from-json", type=str, default=None,
                         help="Path to JSON file: {type: [topics]} — used by gap_finder")
+    parser.add_argument("--force", action="store_true",
+                        help="Overwrite existing notes")
     args = parser.parse_args()
 
     kg = None
@@ -892,4 +1008,4 @@ if __name__ == "__main__":
     print(f"   KG     : {'enabled' if kg else 'disabled'}")
     print()
 
-    build_vault(args.output, topics=topics, kg=kg, delay=args.delay, resume_from=args.resume)
+    build_vault(args.output, topics=topics, kg=kg, delay=args.delay, resume_from=args.resume, force=args.force)

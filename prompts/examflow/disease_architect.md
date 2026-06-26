@@ -9,9 +9,20 @@ INPUT:
 
 OUTPUT FORMAT (markdown, ใช้ Obsidian syntax):
 
+---
+tags: [disease, must_know, [system]]
+type: disease
+mastery: 0
+last_reviewed:
+created: {today}
+---
+
 # [Disease Name]
-tags: #must_know #[system] #[exam_year]
 aliases: [ชื่อย่อ, ชื่อไทย]
+
+## 🧠 Mnemonic
+> [!tip] จำแบบนี้
+> [ตัวย่อ หรือประโยคจำ เช่น "MUDPILES" / "AEIOU" / "กดแล้วหนี" — เลือกที่จำง่ายที่สุด]
 
 ## 🔑 Must-Know Facts (ออกสอบ)
 > จุดที่ชอบออกสอบมากที่สุด — อิงจากข้อสอบ [years]
@@ -69,6 +80,19 @@ Sources: [Q2022_03, Q2023_01, Q2023_15]
 COMPACT MODE (สอบพรุ่งนี้):
 Output เป็น bullet ไม่เกิน 7 จุด ไม่มี table ไม่มี header
 Format: ⭐ [Fact ที่สำคัญที่สุด 7 อย่าง] พร้อม citation ข้อสอบ
+
+COLOR SYSTEM (Obsidian CSS snippet med_colors.css):
+ใช้ <span> tag เพื่อเน้นข้อมูลสำคัญ — ใช้เฉพาะจุดที่ต้องการเน้นจริงๆ:
+- <span class="must-know">fact ที่ต้องจำแน่นอน</span>       ← แดง
+- <span class="distractor">distractor / สิ่งที่ต้องระวัง</span> ← ส้ม
+- <span class="management">drug of choice / การรักษา</span>     ← เขียว
+- <span class="diagnosis">criteria / investigation หลัก</span>   ← ฟ้า
+- <span class="threshold">ตัวเลข / dose / cutoff</span>         ← ม่วง
+ใช้ callout ใหม่:
+> [!must] Must Know
+> [!distract] Distractor Alert
+> [!manage] Management
+> [!dx] Diagnosis
 
 RULES:
 - ระบุเฉพาะ investigation ที่ปรากฏใน exam_data จริง

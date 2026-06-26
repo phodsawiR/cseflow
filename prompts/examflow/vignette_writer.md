@@ -55,3 +55,10 @@ STYLE RULES (critical):
 - Question stem ต้องเป็น "what is the MOST LIKELY / BEST NEXT STEP / MOST APPROPRIATE"
 - อิง clinical presentation จาก exam_samples อย่างใกล้ชิด ห้าม hallucinate pattern ใหม่
 - สร้างได้ทีละ 1 vignette ต่อ call เพื่อให้ grounding gate ตรวจสอบได้
+
+COLOR SYSTEM — ใส่สีใน note output:
+- <span class="must-know">key fact</span>                แดง
+- <span class="distractor">distractor / ตัวลวง</span>   ส้ม
+- <span class="management">การรักษา</span>               เขียว
+- <span class="diagnosis">criteria / investigation</span> ฟ้า
+- <span class="threshold">ตัวเลข / dose</span>           ม่วง

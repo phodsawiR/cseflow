@@ -162,8 +162,12 @@ def run_g2_analysis(user_input: str) -> str:
     }, ensure_ascii=False, indent=2)
 
     # Parallel: pattern_finder + distractor_analyzer
-    pattern_raw    = _call("examflow_pattern",    system=_load_prompt("pattern_finder"),    prompt=kb_summary)
-    distractor_raw = _call("examflow_distractor", system=_load_prompt("distractor_analyzer"), prompt=kb_summary)
+    # _call(agent_name, prompt, system) — note: prompt before system
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_pattern    = ex.submit(_call, "examflow_pattern",    kb_summary, _load_prompt("pattern_finder"))
+        f_distractor = ex.submit(_call, "examflow_distractor", kb_summary, _load_prompt("distractor_analyzer"))
+        pattern_raw    = f_pattern.result()
+        distractor_raw = f_distractor.result()
 
     merged = f"{pattern_raw}\n\n---\n\n## Distractor Analysis\n\n{distractor_raw}"
 
@@ -223,16 +227,22 @@ def run_g3_disease(user_input: str, compact: bool = False) -> str:
             "source_context": json.dumps(disease_data, ensure_ascii=False)
         }, ensure_ascii=False)
     )
+    # Fall back to ungrounded draft if grounding gate fails
+    if grounded.startswith("[ERROR"):
+        grounded = disease_draft
 
     if compact:
         return grounded
 
-    # Full mode: format for Obsidian
+    # Full mode: format for Obsidian (separate agent from grounding gate)
     formatted = _call(
-        "examflow_grounding",
+        "examflow_obsidian",
         system=_load_prompt("obsidian_formatter"),
         prompt=grounded
     )
+    # Fall back to grounded content if obsidian formatter fails
+    if formatted.startswith("[ERROR"):
+        formatted = grounded
 
     # Save to reports/
     safe_name = re.sub(r'[^\w\s-]', '', disease_data["disease_name"]).strip().replace(' ', '_')
@@ -352,7 +362,11 @@ def run_g6_ultra(user_input: str) -> str:
 # ─────────────────────────────────────────────────────────
 def _extract_disease_name(text: str) -> str:
     """Extract disease name from user query."""
+    # Strip [branch Gx] / [branch U] prefix first
+    text = re.sub(r'\[branch\s*[gGuU]\d*\]\s*', '', text, flags=re.IGNORECASE).strip()
+
     patterns = [
+        r'สรุปโรค\s+(.+)',
         r'สรุป\s+(.+?)(?:\s+ต้องรู้|\s+สำหรับสอบ|$)',
         r'สรุปเรื่อง\s+(.+)',
         r'(.+?)\s+ต้องรู้อะไร',
@@ -365,8 +379,8 @@ def _extract_disease_name(text: str) -> str:
         m = re.search(pattern, text, re.IGNORECASE)
         if m:
             return m.group(1).strip()
-    # Fallback: return cleaned text
-    return re.sub(r'(สรุป|ต้องรู้|ออกโจทย์|ฝึกทำ|สอบพรุ่งนี้|สรุปสำหรับสอบ)', '', text).strip()
+    # Fallback: strip Thai command words
+    return re.sub(r'(สรุปโรค|สรุป|ต้องรู้|ออกโจทย์|ฝึกทำ|สอบพรุ่งนี้|สรุปสำหรับสอบ)', '', text).strip()
 
 
 # ─────────────────────────────────────────────────────────
@@ -447,6 +461,7 @@ def run_examflow_branch(branch: str, user_input: str, directives: list = None) -
         "G4": run_g4_vignette,
         "G5": run_g5_gap,
         "G6": run_g6_ultra,
+        "G7": run_g7_scope_all,
     }
 
     fn = dispatch.get(branch)

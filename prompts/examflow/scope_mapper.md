@@ -32,3 +32,10 @@ OUTPUT FORMAT (markdown):
 
 ### เก็งข้อสอบปีหน้า
 ⭐ [โรค] — เหตุผล: [อิงจาก pattern_analysis.predicted_high_yield_next หรือ cross_year_trends เท่านั้น]
+
+COLOR SYSTEM — ใช้ <span> tag เฉพาะจุดสำคัญ:
+- <span class="must-know">fact ที่ต้องจำ</span>         แดง
+- <span class="distractor">distractor / ระวัง</span>    ส้ม
+- <span class="management">การรักษา</span>               เขียว
+- <span class="diagnosis">criteria / investigation</span> ฟ้า
+- <span class="threshold">ตัวเลข / cutoff</span>        ม่วง

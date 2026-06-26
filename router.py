@@ -24,6 +24,38 @@ _GEMINI_FLASH_MODEL    = "gemini-3.5-flash"    # fast structured tasks (same bas
 _current_session: ContextVar[str] = ContextVar("current_session", default="")
 _step_log: dict[str, list] = {}
 
+# ── Cost tracking ──────────────────────────────────────────────────────────────
+# Pricing per 1M tokens (USD) — update if Google/Anthropic changes rates
+_COST_TABLE: dict[str, dict] = {
+    "claude":             {"in":  3.00, "out": 15.00, "think": 0.0},   # Sonnet 4.6
+    "gemini-thinking":    {"in":  1.25, "out": 10.00, "think": 3.50},  # Gemini Pro thinking
+    "gemini-latest":      {"in":  0.15, "out":  0.60, "think": 0.0},   # Gemini 3.5 Flash
+    "gemini-latest-grnd": {"in":  0.15, "out":  0.60, "think": 0.0},   # Gemini 3.5 Flash + Search
+    "gemini-flash":       {"in": 0.075, "out":  0.30, "think": 0.0},   # Gemini Flash fast
+    "ollama":             {"in":  0.0,  "out":  0.0,  "think": 0.0},   # local — free
+}
+_THB_PER_USD = 36.0
+_cost_log: dict[str, dict] = {}  # sid → {model_key: {in, out, think, cost_usd}}
+
+
+def _log_cost(model_key: str, in_tok: int, out_tok: int, think_tok: int = 0) -> None:
+    sid = _current_session.get()
+    if not sid:
+        return
+    p = _COST_TABLE.get(model_key, {"in": 0.0, "out": 0.0, "think": 0.0})
+    cost_usd = (
+        in_tok    * p["in"]    / 1_000_000 +
+        out_tok   * p["out"]   / 1_000_000 +
+        think_tok * p["think"] / 1_000_000
+    )
+    bucket = _cost_log.setdefault(sid, {}).setdefault(
+        model_key, {"in": 0, "out": 0, "think": 0, "cost_usd": 0.0}
+    )
+    bucket["in"]       += in_tok
+    bucket["out"]      += out_tok
+    bucket["think"]    += think_tok
+    bucket["cost_usd"] += cost_usd
+
 AGENT_LABELS: Dict[str, str] = {
     "navigator":        "วิเคราะห์ input",
     "pi_checker":       "ตรวจสอบข้อมูลผู้ป่วย",
@@ -48,6 +80,19 @@ AGENT_LABELS: Dict[str, str] = {
     "patho_agent":      "อธิบาย Pathophysiology",
     "score_agent":      "คำนวณ Clinical Scores",
     "qa_agent":         "ตรวจสอบคุณภาพรายงาน",
+    "blind_spot_checker":  "ตรวจจุดบอด Progress Note",
+    # ── ExamFlow agents ───────────────────────────────────────────────────────
+    "examflow_extraction": "ExamFlow: สกัดข้อสอบ",
+    "examflow_grounding":  "ExamFlow: ตรวจสอบ Grounding",
+    "examflow_obsidian":   "ExamFlow: จัดรูปแบบ Obsidian",
+    "examflow_scope":      "ExamFlow: สร้าง Scope Checklist",
+    "examflow_pattern":    "ExamFlow: วิเคราะห์ Pattern",
+    "examflow_distractor": "ExamFlow: วิเคราะห์ Distractors",
+    "examflow_disease":    "ExamFlow: สร้างสรุปโรค / Vignette",
+    "examflow_gap":        "ExamFlow: ตรวจ Gap ใน Vault",
+    "examflow_lecture":    "ExamFlow: Lecture-Exam Bridge สรุปก่อนสอบ",
+    # ── Radiology ─────────────────────────────────────────────────────────────
+    "xray_vocab_reporter": "สร้าง CXR Vocabulary Pool Note",
 }
 
 # ── Role assignment ─────────────────────────────────────────────────────────────
@@ -65,6 +110,7 @@ AGENT_MODELS: Dict[str, str] = {
     "omni_planner":      "claude",              # freestyle multi-step planner
     "analyzer":          "claude",              # final clinical reasoning + synthesis
     "reasoning_gate":    "claude",              # DDx arbitration gate
+    "blind_spot_checker": "gemini-thinking",    # identify clinical gaps — thinking depth needed
 
     # ── Gemini 2.5 Pro (thinking): tasks needing deliberate deep reasoning ────
     "challenger":        "gemini-thinking",     # DDx challenge — needs thinking depth
@@ -88,13 +134,38 @@ AGENT_MODELS: Dict[str, str] = {
     # ── Gemini 2.5 Flash: fast structured tasks ───────────────────────────────
     "smart_router":      "gemini-flash",        # complexity routing decision
     "revision_router":   "gemini-flash",        # route revision feedback
-    "formatter":         "gemini-flash",        # format final output
+    "formatter":         "gemini-flash",        # format final output (legacy / non-A branches)
     "report_architect":  "gemini-flash",        # SOAP structure planning
     "score_agent":       "gemini-flash",        # clinical score calculation
     "omni_executor":     "gemini-flash",        # plan step fallback executor
+    # ── Branch A: reasoning chain (Steps 2–4) ────────────────────────────────
+    "sign_symptom_mapper": "gemini-latest",     # Step 2: DDx → expected signs/symptoms/PE
+    "gap_analyzer":        "gemini-latest",     # Step 3: compare documented vs expected
+    "attending_qa":        "claude",            # Step 4: generate attending's Q&A
+    # ── Branch A split formatters (Step 5) ───────────────────────────────────
+    "formatter_aug":     "gemini-latest",       # Section 1: inline augmentation
+    "formatter_missing": "gemini-flash",        # Section 3: missing critical list (just present)
+    "formatter_qa":      "gemini-flash",        # Section 4: format attending_qa output (just present)
+    "formatter_disease": "gemini-latest",       # Section 5: disease quick reference
 
     # ── Local: never leaves machine ───────────────────────────────────────────
     "pi_checker":        "ollama",              # patient info anonymization
+
+    # ── ExamFlow: offline structured tasks → gemini-flash ─────────────────────
+    "examflow_extraction": "gemini-flash",     # PDF question extraction (offline batch)
+    "examflow_grounding":  "gemini-flash",     # anti-hallucination gate (every G branch)
+    "examflow_obsidian":   "gemini-flash",     # Obsidian markdown formatter (G3 only)
+    "examflow_scope":      "gemini-flash",     # scope checklist generator (G1)
+    "examflow_pattern":    "gemini-flash",     # pattern / trend analysis (G2)
+    "examflow_distractor": "gemini-flash",     # distractor analysis (G2)
+    "examflow_gap":        "gemini-flash",     # vault gap detection (G5)
+    "examflow_lecture":    "gemini-flash",     # lecture-exam bridge summary (G8)
+
+    # ── ExamFlow: complex synthesis → claude ──────────────────────────────────
+    "examflow_disease":    "claude",           # disease architect + vignette writer (G3/G4/G6)
+
+    # ── Radiology ─────────────────────────────────────────────────────────────
+    "xray_vocab_reporter": "claude",           # CXR vocab pool note → rich synthesis
 }
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -132,11 +203,35 @@ def _call_claude(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Claude/{_CLAUDE_MODEL}): Requesting...")
     response = claude.messages.create(
         model=_CLAUDE_MODEL,
-        max_tokens=8192,
-        system=system or load_prompt(agent_name),
+        max_tokens=16384,
+        system=system,
         messages=[{"role": "user", "content": prompt}],
     )
+    _log_cost("claude", response.usage.input_tokens, response.usage.output_tokens)
     return response.content[0].text
+
+
+# ── Gemini streaming helper ────────────────────────────────────────────────────
+
+_DEFAULT_GEMINI_CONFIG = types.GenerateContentConfig(max_output_tokens=32768)
+
+def _stream_gemini(model: str, content: str, config=None) -> tuple[str, object]:
+    """Stream Gemini response — each chunk proves connection is alive.
+    Returns (full_text, usage_metadata_from_last_chunk).
+    """
+    chunks: list[str] = []
+    last_meta = None
+    stream = gemini_client.models.generate_content_stream(
+        model=model,
+        contents=content,
+        config=config or _DEFAULT_GEMINI_CONFIG,
+    )
+    for chunk in stream:
+        if chunk.text:
+            chunks.append(chunk.text)
+        if chunk.usage_metadata:
+            last_meta = chunk.usage_metadata
+    return "".join(chunks), last_meta
 
 
 # ── Gemini 2.5 Pro — extended thinking ────────────────────────────────────────
@@ -148,14 +243,18 @@ def _call_gemini_thinking(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Gemini-thinking/{_GEMINI_THINKING_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
     level   = "high" if agent_name in _HIGH_THINKING_AGENTS else "medium"
-    response = gemini_client.models.generate_content(
-        model=_GEMINI_THINKING_MODEL,
-        contents=content,
+    text, um = _stream_gemini(
+        _GEMINI_THINKING_MODEL, content,
         config=types.GenerateContentConfig(
+            max_output_tokens=32768,
             thinking_config=types.ThinkingConfig(thinking_level=level),
         ),
     )
-    return response.text
+    _log_cost("gemini-thinking",
+              (um.prompt_token_count or 0) if um else 0,
+              (um.candidates_token_count or 0) if um else 0,
+              (um.thoughts_token_count or 0) if um else 0)
+    return text
 
 
 # ── Gemini 3.5 Flash — latest frontier ────────────────────────────────────────
@@ -164,11 +263,11 @@ def _call_gemini_thinking(agent_name: str, prompt: str, system: str) -> str:
 def _call_gemini_latest(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Gemini-latest/{_GEMINI_LATEST_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    response = gemini_client.models.generate_content(
-        model=_GEMINI_LATEST_MODEL,
-        contents=content,
-    )
-    return response.text
+    text, um = _stream_gemini(_GEMINI_LATEST_MODEL, content)
+    _log_cost("gemini-latest",
+              (um.prompt_token_count or 0) if um else 0,
+              (um.candidates_token_count or 0) if um else 0)
+    return text
 
 
 # ── Gemini 3.5 Flash + Google Search grounding ────────────────────────────────
@@ -180,15 +279,17 @@ def _call_gemini_latest_grounded(agent_name: str, prompt: str, system: str) -> s
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
             future = ex.submit(
-                gemini_client.models.generate_content,
-                model=_GEMINI_LATEST_MODEL,
-                contents=content,
-                config=types.GenerateContentConfig(
+                _stream_gemini,
+                _GEMINI_LATEST_MODEL, content,
+                types.GenerateContentConfig(
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
             )
-            response = future.result(timeout=90)
-        return response.text
+            text, um = future.result(timeout=90)
+        _log_cost("gemini-latest-grnd",
+                  (um.prompt_token_count or 0) if um else 0,
+                  (um.candidates_token_count or 0) if um else 0)
+        return text
     except Exception as err:
         print(f"[router] {agent_name} grounding failed ({err!r}) — falling back")
     return _call_gemini_latest_no_grounding(agent_name, prompt, system)
@@ -198,11 +299,11 @@ def _call_gemini_latest_grounded(agent_name: str, prompt: str, system: str) -> s
 def _call_gemini_latest_no_grounding(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Gemini-latest/no-grounding fallback): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    response = gemini_client.models.generate_content(
-        model=_GEMINI_LATEST_MODEL,
-        contents=content,
-    )
-    return response.text
+    text, um = _stream_gemini(_GEMINI_LATEST_MODEL, content)
+    _log_cost("gemini-latest",
+              (um.prompt_token_count or 0) if um else 0,
+              (um.candidates_token_count or 0) if um else 0)
+    return text
 
 
 # ── Gemini 2.5 Flash — fast structured tasks ──────────────────────────────────
@@ -211,11 +312,11 @@ def _call_gemini_latest_no_grounding(agent_name: str, prompt: str, system: str) 
 def _call_gemini_flash(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Gemini-flash/{_GEMINI_FLASH_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
-    response = gemini_client.models.generate_content(
-        model=_GEMINI_FLASH_MODEL,
-        contents=content,
-    )
-    return response.text
+    text, um = _stream_gemini(_GEMINI_FLASH_MODEL, content)
+    _log_cost("gemini-flash",
+              (um.prompt_token_count or 0) if um else 0,
+              (um.candidates_token_count or 0) if um else 0)
+    return text
 
 
 # ── Ollama — local privacy ─────────────────────────────────────────────────────
@@ -247,6 +348,7 @@ def call_agent(agent_name: str, prompt: str, system: str = "") -> str:
     sid   = _current_session.get()
     _log_step(sid, agent_name, "running")
     model = AGENT_MODELS.get(agent_name, "gemini-latest")
+    system = system or load_prompt(agent_name)
 
     fn = _DISPATCH.get(model)
     if fn is None:
@@ -272,3 +374,43 @@ def call_agent(agent_name: str, prompt: str, system: str = "") -> str:
     else:
         _log_step(sid, agent_name, "done")
     return result
+
+
+# ── Cost summary (public) ──────────────────────────────────────────────────────
+
+_MODEL_LABELS = {
+    "claude":             "Claude Sonnet 4.6",
+    "gemini-thinking":    "Gemini Pro (thinking)",
+    "gemini-latest":      "Gemini 3.5 Flash",
+    "gemini-latest-grnd": "Gemini 3.5 Flash (grounded)",
+    "gemini-flash":       "Gemini Flash (fast)",
+    "ollama":             "Ollama (local)",
+}
+
+
+def get_session_cost(sid: str) -> dict:
+    """Return raw cost accumulator for a session."""
+    return _cost_log.get(sid, {})
+
+
+def format_cost_summary(sid: str) -> str:
+    """Return a human-readable cost breakdown for the session."""
+    data = _cost_log.get(sid, {})
+    if not data:
+        return ""
+    lines = ["---", "💰 **ค่าใช้จ่าย session นี้**"]
+    total_usd = 0.0
+    for key, s in data.items():
+        label    = _MODEL_LABELS.get(key, key)
+        thb      = s["cost_usd"] * _THB_PER_USD
+        total_usd += s["cost_usd"]
+        think_str = f" + {s['think']:,} think" if s["think"] else ""
+        lines.append(f"  {label}: {s['in']:,} in / {s['out']:,} out{think_str} → ฿{thb:.3f}")
+    lines.append(f"  {'─'*44}")
+    lines.append(f"  รวม: **฿{total_usd * _THB_PER_USD:.3f}** (~${total_usd:.5f})")
+    return "\n".join(lines)
+
+
+def clear_session_cost(sid: str) -> None:
+    """Remove cost data for a completed session."""
+    _cost_log.pop(sid, None)

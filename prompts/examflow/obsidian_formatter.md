@@ -40,3 +40,12 @@ RULES:
 
 OUTPUT: Complete formatted markdown ready to save as .md file in Obsidian.
 Do NOT add any preamble or explanation — output ONLY the markdown content.
+
+COLOR SYSTEM — ใช้ <span> tag ในทุก note ที่ output ลง Obsidian:
+- <span class="must-know">fact ที่ต้องจำ / critical</span>         แดง
+- <span class="distractor">distractor / ระวังสับสน</span>          ส้ม
+- <span class="management">drug of choice / การรักษา</span>         เขียว
+- <span class="diagnosis">criteria / investigation หลัก</span>     ฟ้า
+- <span class="threshold">ตัวเลข / dose / cutoff</span>            ม่วง
+ใช้ callout ใหม่: [!must] [!distract] [!manage] [!dx] แทน [!important] [!warning]
+ใส่สีเฉพาะจุดสำคัญ ไม่ใส่ทุกบรรทัด

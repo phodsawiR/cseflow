@@ -30,7 +30,7 @@ load_dotenv()
 def _detect_branch(text: str) -> str:
     """Detect ExamFlow branch from text. Falls back to G2 (pattern) for exam queries."""
     t = text.lower()
-    m = re.search(r'\[branch\s*([g][1-6])\]', t)
+    m = re.search(r'\[branch\s*(g[1-7]|u)\]', t)
     if m:
         return m.group(1).upper()
     if any(k in t for k in ["สอบพรุ่งนี้", "ultra", "สรุปสั้น"]):
@@ -51,6 +51,7 @@ _BRANCH_LABELS = {
     "U":  "Freestyle / Omni — Planner จัดการเอง",
     "G1": "Scope Query", "G2": "Exam Analysis", "G3": "Disease Summary",
     "G4": "Vignette",    "G5": "Gap Detector",  "G6": "Ultra Summary",
+    "G8": "Lecture-Exam Bridge",
 }
 
 
@@ -77,8 +78,29 @@ def query(user_input: str) -> str:
     print(f"\n[ExamFlow] Branch {branch} — {label}")
     print("─" * 50)
 
+    if branch == "U":
+        return _run_branch_u(user_input)
+
     from examflow.pipeline import run_examflow_branch
     return run_examflow_branch(branch, user_input)
+
+
+def _run_branch_u(user_input: str) -> str:
+    """Run Branch U (Omni) from CLI — auto-confirm plan."""
+    import sys
+    sys.path.insert(0, str(_ROOT))
+    from session import CaseSession
+
+    sess = CaseSession()
+    sess.branch = "U"
+    sess.patient_data = user_input
+
+    print("[Branch U] Phase 1 — omni_planner...")
+    plan_response = sess._run_pipeline(user_input, [])
+
+    print(plan_response)
+    print("\n[Branch U] Phase 2 — executing plan (auto-confirm)...")
+    return sess.execute_plan("ยืนยัน")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
