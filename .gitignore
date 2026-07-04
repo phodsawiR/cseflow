@@ -29,3 +29,27 @@ obsidian/
 
 # Google service account credentials
 google-service-account.json
+
+# Lecture inbox cache
+inbox/**/.cache/
+
+# Ad-hoc scratch/debug scripts and runtime output (not source-controlled)
+_debug_out.txt
+_rebuild_broken.json
+_run_topics_tmp.json
+_bulk_g3_result.json
+gap_topics.json
+missing.json
+two_topics.json
+malaria_drugs.json
+tmp*.py
+test_anthropic*.py
+_read_pdf.py
+bot_err.txt
+bot_log.txt
+bot_startup.log
+builder_log.txt
+stderr.log
+stdout.log
+.cf_url
+*.bak_*

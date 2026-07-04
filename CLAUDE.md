@@ -57,7 +57,7 @@ Multi-agent clinical reasoning + exam preparation pipeline for Thai medical stud
 | U | Freestyle / Omni | Omni Planner → [agent steps] |
 
 ## Model Assignment
-- **Claude Sonnet 4.6**: navigator, omni_planner, analyzer, reasoning_gate, examflow_disease
+- **Claude Sonnet 5**: navigator, omni_planner, analyzer, reasoning_gate, examflow_disease
 - **Gemini Pro (thinking)**: challenger, qa_agent, source_finder
 - **Gemini Flash (grounded)**: researcher, drug_agent, interpreter, patho_agent, kb_retrieval
 - **Gemini Flash (latest)**: symptom_mapper, round_coach, professor, query_agent, approach_flowchart
@@ -121,7 +121,7 @@ User Query → G1–G6 Pipeline Agent → Grounding Gate → Output
 ## Integration Points
 | จุดเชื่อม | วิธี |
 |---|---|
-| G3 Disease → Obsidian | Auto-copy to OBSIDIAN_VAULT_PATH/diseases/ |
+| G3 Disease → Obsidian | Auto-copy to OBSIDIAN_VAULT_PATH/05 - Exam Scope/MCQ/ (grouped with exam content for now, may split later) |
 | G3 Disease → Anki | anki_export.py อ่าน reports/disease_*.md |
 | G4 Vignette → Anki | anki_export.py อ่าน reports/vignette_*.md |
 | Branch A + ExamFlow | Disease Architect output เสริม Professor agent context (future) |

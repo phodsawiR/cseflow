@@ -24,6 +24,7 @@ CaseFlow วิเคราะห์ข้อมูลผู้ป่วยแ�
 | **E** | Morning Round Prep | เตรียมราวน์ สรุปเคสเช้า | `เตรียมราวน์เคสนี้: ชาย 70y AKI on CKD...` |
 | **F** | Lab/EKG Interpreter | แปลผล lab, ABG, EKG | `pH 7.28 pCO2 55 HCO3 20 Na 138 K 5.2` |
 | **G** | Admission Note (ใบขาว) | เขียนใบรับผู้ป่วยใหม่ | `เขียนใบขาว: หญิง 45y เจ็บหน้าอก STEMI...` |
+| **H** | Note Blind Spot Checker | ตรวจจุดบอดใบเหลือง — ควรซักอะไรเพิ่ม | `หาจุดบอด S: ดีขึ้น O: BP 120/80 HbA1c 9.2%...` |
 | **U** | Freestyle / Omni | คำสั่งอิสระ ไม่ตรง branch ไหน | `ช่วยสรุปยาทั้งหมดของผู้ป่วยนี้พร้อม renal dose` |
 
 ### การ Override Branch ด้วยตนเอง
@@ -45,6 +46,8 @@ CaseFlow วิเคราะห์ข้อมูลผู้ป่วยแ�
 **Branch G** (Admission): pi_checker → source → [drug_agent ∥ interpreter ∥ patho_agent ∥ score_agent] → analyzer → challenger → reasoning_gate → professor → formatter_a_chula + QA
 
 **Branch B** (Query): kb_retrieval/researcher → query_agent → formatter_b + QA
+
+**Branch H** (Blind Spot): pi_checker → blind_spot_checker → professor → formatter_h + QA
 
 **Branch U** (Freestyle): source → omni_planner (วางแผน) → user ยืนยัน → execute steps → QA
 
@@ -79,8 +82,9 @@ CaseFlow วิเคราะห์ข้อมูลผู้ป่วยแ�
 
 ```
 obsidian/
-├── 00 - Inbox/   ← 13 notes
-├── 01 - Active Cases/   ← 1 note
+├── -01 - lecture/   ← 1 note
+├── 00 - Inbox/   ← 14 notes
+├── 01 - Active Cases/   ← 2 notes
 ├── 02 - Diseases/   ← 1 note
 ├── 03 - Drugs/   ← 0 notes
 ├── 04 - Labs/   ← 5 notes
