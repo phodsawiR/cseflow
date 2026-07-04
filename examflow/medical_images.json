@@ -1,0 +1,337 @@
+{
+  "_comment": "Static image lookup for medical notes. findings = visual signs/scores by keyword. topic_images = disease → [finding keys to embed].",
+  "findings": {
+    "ecthyma gangrenosum": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Ecthyma_gangrenosum.jpg",
+      "caption": "Ecthyma gangrenosum — black necrotic lesion, pathognomonic of Pseudomonas aeruginosa in febrile neutropenia"
+    },
+    "disseminated gonococcal infection": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/22337_lores.jpg",
+      "caption": "Disseminated gonococcal infection — pustular/hemorrhagic skin lesions"
+    },
+    "janeway lesions": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Janeway_lesion.JPG",
+      "caption": "Janeway lesions — painless hemorrhagic macules on palms/soles (Infective Endocarditis)"
+    },
+    "osler nodes": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Osler_Nodules_Hand.jpg",
+      "caption": "Osler nodes — painful subcutaneous nodules on fingertips (Infective Endocarditis)"
+    },
+    "splinter hemorrhages": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Splinter_hemorrhage.jpg",
+      "caption": "Splinter hemorrhages — linear subungual hemorrhages (Infective Endocarditis)"
+    },
+    "malar rash": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Lupusfoto.jpg",
+      "caption": "Malar rash (butterfly rash) — spares nasolabial folds, pathognomonic of SLE"
+    },
+    "gottron's papules": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Dermatomyositis5.jpg",
+      "caption": "Gottron's papules — violaceous papules over MCP/PIP joints (Dermatomyositis)"
+    },
+    "heliotrope rash": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Dermatomyositis7.jpg",
+      "caption": "Heliotrope rash — periorbital violaceous discoloration (Dermatomyositis)"
+    },
+    "palpable purpura": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Vasculitis.JPG",
+      "caption": "Palpable purpura — raised non-blanching lesions (leukocytoclastic vasculitis)"
+    },
+    "erythema marginatum": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Erythema_marginatum.jpg",
+      "caption": "Erythema marginatum — serpiginous migratory rash (Acute Rheumatic Fever, Jones criteria)"
+    },
+    "spider angiomas": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/SpiderAngioma.jpg",
+      "caption": "Spider angiomas — central arteriole with radiating vessels, sign of chronic liver disease"
+    },
+    "caput medusae": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Caput_medusae.jpg",
+      "caption": "Caput medusae — dilated periumbilical veins, sign of portal hypertension"
+    },
+    "terry's nails": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Terry%27s_nails.jpg",
+      "caption": "Terry's nails (leukonychia) — white nails with distal brown band, chronic liver disease"
+    },
+    "koilonychia": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Koilonychia_iron_deficiency_anemia.jpg",
+      "caption": "Koilonychia (spoon nails) — concave nails, sign of iron deficiency anemia"
+    },
+    "petechiae": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Oral_petechiae.JPG",
+      "caption": "Petechiae — pinpoint non-blanching hemorrhages (thrombocytopenia, vasculitis)"
+    },
+    "roth spots": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Roth_spot.jpg",
+      "caption": "Roth spots — white-centered retinal hemorrhages (Infective Endocarditis)"
+    },
+    "curb-65": {
+      "url": null,
+      "caption": "CURB-65 score — Pneumonia severity (Confusion, Urea>7, RR≥30, BP<90/60, Age≥65)"
+    },
+    "wells score dvt": {
+      "url": null,
+      "caption": "Wells Score for DVT"
+    },
+    "wells score pe": {
+      "url": null,
+      "caption": "Wells Score for Pulmonary Embolism"
+    },
+    "sofa score": {
+      "url": null,
+      "caption": "SOFA Score — Sequential Organ Failure Assessment (Sepsis-3)"
+    },
+    "child-pugh score": {
+      "url": null,
+      "caption": "Child-Pugh Score — Liver cirrhosis severity (A/B/C)"
+    },
+    "meld score": {
+      "url": null,
+      "caption": "MELD Score — Model for End-Stage Liver Disease"
+    },
+    "mascc score": {
+      "url": null,
+      "caption": "MASCC Score — Risk index for febrile neutropenia (≥21 = low risk)"
+    },
+    "cha2ds2-vasc": {
+      "url": null,
+      "caption": "CHA₂DS₂-VASc Score — Stroke risk in atrial fibrillation"
+    },
+    "has-bled": {
+      "url": null,
+      "caption": "HAS-BLED Score — Bleeding risk in anticoagulated AF patients"
+    },
+    "killip classification": {
+      "url": null,
+      "caption": "Killip Classification — Heart failure severity in ACS"
+    },
+    "grace score": {
+      "url": null,
+      "caption": "GRACE Score — Risk stratification in ACS"
+    },
+    "spherocytes": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hereditary_Spherocytosis_smear_2010-03-17.JPG",
+      "caption": "Spherocytes — small, round, dense RBCs without central pallor (Warm AIHA, Hereditary Spherocytosis)"
+    },
+    "schistocytes": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Schistocytes.jpg",
+      "caption": "Schistocytes (helmet cells) — fragmented RBCs in MAHA (TTP, HUS, DIC)"
+    },
+    "bite cells": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/BITE_CELLS.jpg",
+      "caption": "Bite cells (degmacytes) — notched RBCs after splenic removal of Heinz bodies (G6PD deficiency)"
+    },
+    "heinz bodies": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pathology_of_G6PD_deficiency.png",
+      "caption": "Heinz body formation in G6PD deficiency — denatured hemoglobin precipitates after oxidative stress"
+    },
+    "target cells": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Target_cells_and_spherocytes.jpg",
+      "caption": "Target cells (codocytes) — bulls-eye appearance, seen in Thalassemia, Liver disease, post-splenectomy"
+    },
+    "pencil cells": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Pencil_cell_or_Pencil_shaped_RBC.jpg",
+      "caption": "Pencil cells (elliptocytes) — elongated hypochromic RBCs in iron deficiency anemia"
+    },
+    "hypochromic microcytes": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Severe_iron_deficiency_anemia.jpg",
+      "caption": "Hypochromic microcytic anemia — pale, small RBCs with increased central pallor (IDA)"
+    },
+    "hypersegmented neutrophils": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hypersegmented_neutrophil.jpg",
+      "caption": "Hypersegmented neutrophil (>5 lobes) — pathognomonic of megaloblastic anemia (B12/Folate deficiency)"
+    },
+    "teardrop cells": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Teardrop_Cells_smear_2009-09-22.JPG",
+      "caption": "Teardrop cells (dacrocytes) — pear-shaped RBCs in Thalassemia and myelofibrosis"
+    },
+    "rbc agglutination": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Red_cell_agglutination.jpg",
+      "caption": "RBC agglutination (grape-like clumps) — Cold AIHA / cold agglutinin disease"
+    },
+    "rouleaux": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Multiple_myeloma_peripheral_blood_morphology_-_rouleaux,_background_staining_and_plasma_cell.jpg",
+      "caption": "Rouleaux formation — RBC stacking like coins, seen in Multiple Myeloma (high paraprotein)"
+    },
+    "atrophic glossitis": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Image_of_the_tongue_in_a_B12-deficient_patient_without_a_history_of_gastrectomy.webp",
+      "caption": "Atrophic glossitis (Hunters glossitis) — smooth, red tongue with loss of papillae (B12 deficiency)"
+    },
+    "angular cheilitis": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Angular_cheilitis1.jpg",
+      "caption": "Angular cheilitis — fissuring at corners of mouth (Iron deficiency anemia, B2 deficiency)"
+    },
+    "chipmunk face thalassemia": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/DOMR-6-350-g004.gif",
+      "caption": "Chipmunk face / frontal bossing — thalassemia major facies due to erythroid hyperplasia expanding marrow"
+    },
+    "fibromuscular_dysplasia_(renal_artery_st": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Renal artery angiography in a patient with fibromuscular dysplasia (1).jpg",
+      "caption": "Renal artery angiography in a 35-year-old woman with unexplained hypertension, showing the classic \"string-of-beads\" sign (indicated by arrows) characteristic of medial fibromuscular dysplasia (FMD) of the renal artery."
+    },
+    "abdominal_striae_in_cushing's_syndrome": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Straie with cushing syndrome new photo.jpg",
+      "caption": "Wide, violaceous abdominal striae (purple stretch marks) in a patient with Cushing's syndrome, a classic physical sign indicative of glucocorticoid excess causing secondary hypertension."
+    },
+    "adrenal_cortical_adenoma_in_conn's_syndr": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Adrenal gland Conn syndrome4.jpg",
+      "caption": "Gross pathology of a sliced adrenal gland showing a well-circumscribed, yellow aldosterone-producing cortical adenoma in a patient with Conn's syndrome (primary aldosteronism)."
+    },
+    "hypertensive_retinopathy": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hypertensiveretinopathy.jpg",
+      "caption": "Fundoscopic examination showing advanced hypertensive retinopathy with retinal hemorrhages, cotton-wool spots, hard exudates, and optic disc edema associated with severe, uncontrolled hypertension."
+    },
+    "left_ventricular_hypertrophy_on_ecg": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Left_ventricular_hypertrophy_with_secondary_repolarization.jpg",
+      "caption": "Twelve-lead ECG showing left ventricular hypertrophy (LVH) with characteristic secondary repolarization abnormalities (ST-T strain pattern), a common target organ complication of chronic hypertension."
+    },
+    "manual_blood_pressure_measurement_tools": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Manual_stethoscope,_sphygmomanometer.jpg",
+      "caption": "An aneroid sphygmomanometer and manual stethoscope, which are standard clinical diagnostic instruments used for evaluating and monitoring hypertension."
+    },
+    "renal_artery_stenosis_(fibromuscular_dys": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Renal_artery_angiography_in_a_patient_with_fibromuscular_dysplasia_(1).jpg",
+      "caption": "Renal artery angiography in a 35-year-old woman with unexplained hypertension showing the typical 'string-of-beads' sign (indicated by arrows) characteristic of fibromuscular dysplasia (FMD) involving an accessory left renal artery."
+    },
+    "cushing's_syndrome_purple_striae": {
+      "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Striae.jpg",
+      "caption": "Wide, violaceous abdominal striae in a patient with Cushing's syndrome, a classic secondary cause of resistant and refractory hypertension due to chronic cortisol excess."
+    }
+  },
+  "topic_images": {
+    "Febrile Neutropenia": [
+      "ecthyma gangrenosum",
+      "mascc score"
+    ],
+    "Infective Endocarditis": [
+      "janeway lesions",
+      "osler nodes",
+      "roth spots",
+      "splinter hemorrhages"
+    ],
+    "Community Acquired Pneumonia": [
+      "curb-65"
+    ],
+    "Pulmonary Embolism": [
+      "wells score pe"
+    ],
+    "Heart Failure": [
+      "killip classification"
+    ],
+    "ACS": [
+      "killip classification",
+      "grace score"
+    ],
+    "Atrial Fibrillation": [
+      "cha2ds2-vasc",
+      "has-bled"
+    ],
+    "Sepsis": [
+      "sofa score"
+    ],
+    "Upper GI Bleed": [
+      "caput medusae",
+      "spider angiomas"
+    ],
+    "Jaundice": [
+      "spider angiomas",
+      "terry's nails",
+      "child-pugh score"
+    ],
+    "Liver Cirrhosis": [
+      "spider angiomas",
+      "caput medusae",
+      "terry's nails",
+      "child-pugh score",
+      "meld score"
+    ],
+    "DVT": [
+      "wells score dvt"
+    ],
+    "SLE": [
+      "malar rash",
+      "palpable purpura"
+    ],
+    "Dermatomyositis": [
+      "gottron's papules",
+      "heliotrope rash"
+    ],
+    "Vasculitis": [
+      "palpable purpura"
+    ],
+    "Rheumatic Fever": [
+      "erythema marginatum"
+    ],
+    "Iron Deficiency Anemia": [
+      "koilonychia",
+      "angular cheilitis",
+      "hypochromic microcytes",
+      "pencil cells"
+    ],
+    "Megaloblastic Anemia": [
+      "hypersegmented neutrophils",
+      "atrophic glossitis"
+    ],
+    "B12 Deficiency": [
+      "atrophic glossitis",
+      "hypersegmented neutrophils"
+    ],
+    "Folate Deficiency": [
+      "atrophic glossitis",
+      "hypersegmented neutrophils"
+    ],
+    "AIHA": [
+      "spherocytes",
+      "rbc agglutination"
+    ],
+    "Warm AIHA": [
+      "spherocytes"
+    ],
+    "Cold AIHA": [
+      "rbc agglutination"
+    ],
+    "Hereditary Spherocytosis": [
+      "spherocytes"
+    ],
+    "G6PD Deficiency": [
+      "bite cells",
+      "heinz bodies"
+    ],
+    "Thalassemia": [
+      "target cells",
+      "teardrop cells",
+      "hypochromic microcytes",
+      "chipmunk face thalassemia"
+    ],
+    "TTP": [
+      "schistocytes"
+    ],
+    "HUS": [
+      "schistocytes"
+    ],
+    "DIC": [
+      "schistocytes"
+    ],
+    "MAHA": [
+      "schistocytes"
+    ],
+    "Multiple Myeloma": [
+      "rouleaux"
+    ],
+    "Secondary Hypertension": [
+      "fibromuscular_dysplasia_(renal_artery_st",
+      "abdominal_striae_in_cushing's_syndrome",
+      "adrenal_cortical_adenoma_in_conn's_syndr"
+    ],
+    "Hypertension (General & Diagnosis)": [
+      "hypertensive_retinopathy",
+      "left_ventricular_hypertrophy_on_ecg",
+      "manual_blood_pressure_measurement_tools"
+    ],
+    "Resistant and Refractory Hypertension": [
+      "renal_artery_stenosis_(fibromuscular_dys",
+      "hypertensive_retinopathy",
+      "cushing's_syndrome_purple_striae"
+    ]
+  }
+}

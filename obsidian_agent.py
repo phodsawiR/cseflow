@@ -58,7 +58,7 @@ _check_single_instance()
 # ==========================================
 API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 ALLOWED_USER_ID = int(os.getenv('TELEGRAM_USER_ID', '0'))
-CASEFLOW_PATH = r"C:\Users\USER\OneDrive\Desktop\caseflow"
+CASEFLOW_PATH = r"c:\Users\ASUS\Documents\caseflow"
 VAULT_PATH = os.path.join(CASEFLOW_PATH, "obsidian")
 GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 
@@ -286,6 +286,41 @@ def _poll_and_deliver(user_id: str, chat_id: int, progress_msg_id: int):
         )
 
 
+def _poll_exam_progress(session_id: str, chat_id: int, progress_msg_id: int):
+    """Background thread: poll /progress for exam/KB ingest session."""
+    start     = time.time()
+    last_text = ""
+    while True:
+        time.sleep(3)
+        try:
+            data = _req.get(f"{CF_API}/progress/{session_id}", timeout=10).json()
+        except Exception:
+            break
+        steps        = data.get("steps", [])
+        elapsed      = int(time.time() - start)
+        still_running = data.get("processing", False)
+
+        lines = [f"{'✅ เสร็จแล้ว' if not still_running else '⏳ กำลัง ingest'} ({elapsed}s)\n"]
+        for s in steps[-20:]:
+            icon   = _STEP_ICON.get(s.get("status", ""), "•")
+            label  = s.get("label", "?")
+            detail = s.get("detail", "")
+            suffix = f" — {detail[:70]}" if detail and s.get("status") in ("error", "done") else ""
+            lines.append(f"{icon} {label}{suffix}")
+
+        new_text = "\n".join(lines)
+        if len(new_text) > 3800:
+            new_text = new_text[:3800] + "\n…"
+        if new_text != last_text:
+            try:
+                bot.edit_message_text(new_text, chat_id, progress_msg_id)
+                last_text = new_text
+            except Exception:
+                pass
+        if not still_running:
+            break
+
+
 def _start_caseflow(user_id: str, chat_id: int, text: str):
     """POST /start → spawn polling thread."""
     try:
@@ -341,6 +376,13 @@ HELP_TEXT = """\
 Branches: A=case | B=query | C=symptom | D=progress
           E=round | F=interpret | G=admission | U=freestyle
 
+━━━ *ExamFlow Ingest* (ข้อสอบเก่า) ━━━
+`/examstatus` — ดูสถานะ exam KB (จำนวนข้อ / โรคที่ออกบ่อย)
+`/examinbox` — list PDF ใน inbox/exams/ ที่รอ ingest
+`/examall` — ingest ทุกไฟล์ใน inbox/exams/ ทีเดียว
+`/examdedup` — ลบข้อที่ซ้ำออกจาก exam KB
+ส่งไฟล์ PDF พร้อม caption `exam` — ingest ทันที
+
 ━━━ *Ward Buzzer* (สร้าง notes จากใบส่งเวร) ━━━
 `/ward <ใบส่งเวร>` — สกัด diseases/drugs แล้ว confirm สร้าง notes
 พิมพ์ `/confirm` เพื่อรัน vault builder
@@ -354,6 +396,7 @@ Branches: A=case | B=query | C=symptom | D=progress
 
 ━━━ *Bot Commands* ━━━
 `/help` — แสดงคำสั่งทั้งหมด
+`/status` — สถานะ server / vault builder
 `/reset` — ล้างประวัติการคุย Gemini
 `/search <คำ>` — ค้นหาใน vault
 `/sync` — force sync GEMINI.md
@@ -705,6 +748,24 @@ def _detect_intent(text: str):
         body = re.sub(r'.{0,20}(?:ส่งเวร|ใบส่งเวร|handover)[:\s]*', '', t, count=1, flags=re.IGNORECASE).strip()
         return ("ward", [body or t])
 
+    # ── ExamFlow / exam queries → caseflow (Branch U จัดการเอง) ─────────────
+    _EXAM_PATTERNS = [
+        r'ออก(?:เรื่อง|โรค|อะไร|ซ้ำ|บ่อย)',
+        r'(?:แนว|pattern).*(?:ข้อสอบ|สอบ)',
+        r'เก็ง(?:ข้อ|สอบ)',
+        r'(?:ข้อสอบ|สอบ).*(?:ออก|มี)',
+        r'(?:ก่อน|เพื่อ)สอบ',
+        r'สรุป(?:สำหรับสอบ|โรค|ให้หน่อย)',
+        r'ต้องรู้(?:อะไร|เรื่อง)',
+        r'ยังขาด(?:อะไร|เรื่อง)',
+        r'สอบพรุ่งนี้',
+        r'(?:ออก|สร้าง)โจทย์',
+        r'น่าจะออก',
+        r'examflow|exam\s*kb',
+    ]
+    if any(re.search(p, tl) for p in _EXAM_PATTERNS) and len(t) > 5:
+        return ("caseflow", [t])
+
     # ── CaseFlow (patient data detected) ─────────────────────────────────────
     if any(re.search(p, tl) for p in _CF_PATTERNS) and len(t) > 40:
         return ("caseflow", [t])
@@ -997,6 +1058,35 @@ def handle_media(message):
             if not any(t in doc_mime for t in ("image", "pdf", "audio")):
                 bot.edit_message_text("❌ รองรับเฉพาะรูป, PDF, ไฟล์เสียง", message.chat.id, progress_msg.message_id)
                 return
+            # ── PDF + caption "exam/ข้อสอบ" → exam ingest ───────────────────
+            _EXAM_CAPS = ("exam", "ข้อสอบ", "ingest exam", "examflow")
+            if "pdf" in doc_mime and any(kw in caption.lower() for kw in _EXAM_CAPS):
+                bot.edit_message_text("📥 กำลังอัพโหลดไปยัง exam KB...", message.chat.id, progress_msg.message_id)
+                raw_bytes, _ = _tg_download(message.document.file_id)
+                fname = message.document.file_name or "exam.pdf"
+                year_m = re.search(r'(20\d{2})', caption + fname)
+                try:
+                    import io
+                    files   = {"file": (fname, io.BytesIO(raw_bytes), "application/pdf")}
+                    payload = {}
+                    if year_m:
+                        payload["year"] = year_m.group(1)
+                    r = _req.post(f"{CF_API}/ingest_exam", files=files, data=payload, timeout=30)
+                    r.raise_for_status()
+                    session_id = r.json()["session_id"]
+                    bot.edit_message_text(
+                        f"⏳ ingest `{fname}` เข้า exam KB...",
+                        message.chat.id, progress_msg.message_id,
+                        parse_mode="Markdown",
+                    )
+                    threading.Thread(
+                        target=_poll_exam_progress,
+                        args=(session_id, message.chat.id, progress_msg.message_id),
+                        daemon=True,
+                    ).start()
+                except Exception as e:
+                    bot.edit_message_text(f"❌ Exam ingest error: {e}", message.chat.id, progress_msg.message_id)
+                return
             data, mime = _tg_download(message.document.file_id)
             if "pdf" in doc_mime:
                 mime = "application/pdf"
@@ -1058,6 +1148,105 @@ def handle_message(message):
                          parse_mode="Markdown")
         except Exception as e:
             bot.reply_to(message, f"❌ Approve error: {e}")
+        return
+
+    # ── ExamFlow commands ─────────────────────────────────────────────────────
+    if query.lower() in ["/examstatus", "/exam_status"]:
+        try:
+            d = _req.get(f"{CF_API}/exam_kb_status", timeout=10).json()
+        except Exception as e:
+            bot.reply_to(message, f"❌ ติดต่อ server ไม่ได้: {e}")
+            return
+        if not d.get("exists"):
+            bot.reply_to(message,
+                "📭 ยังไม่มี exam\\_kb.json\n"
+                "วาง PDF ใน `inbox/exams/` แล้วพิมพ์ `/examall`",
+                parse_mode="Markdown")
+            return
+        lines = [
+            f"📊 *Exam Knowledge Base*\n",
+            f"📝 ข้อสอบทั้งหมด: *{d['total_questions']} ข้อ*",
+            f"📁 ไฟล์ที่ ingest แล้ว: {len(d['source_files'])} ไฟล์",
+        ]
+        if d.get("source_files"):
+            for f in d["source_files"][:10]:
+                lines.append(f"   • `{f}`")
+            if len(d["source_files"]) > 10:
+                lines.append(f"   … และอีก {len(d['source_files'])-10} ไฟล์")
+        if d.get("top_diseases"):
+            lines.append(f"\n🏆 *โรคที่ออกบ่อยสุด:*")
+            for i, dis in enumerate(d["top_diseases"], 1):
+                lines.append(f"  {i}. {dis}")
+        if d.get("generated_at"):
+            lines.append(f"\n🕐 อัพเดทล่าสุด: `{d['generated_at'][:19]}`")
+        bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+        return
+
+    if query.lower() in ["/examinbox", "/exam_inbox"]:
+        try:
+            d = _req.get(f"{CF_API}/scan_exam_inbox", timeout=10).json()
+        except Exception as e:
+            bot.reply_to(message, f"❌ ติดต่อ server ไม่ได้: {e}")
+            return
+        if not d.get("count"):
+            bot.reply_to(message,
+                f"📭 ไม่พบ PDF ใน `inbox/exams/`\n"
+                f"วางไฟล์ที่นั่นแล้วพิมพ์ `/examinbox` อีกครั้ง",
+                parse_mode="Markdown")
+            return
+        lines = [f"📂 *inbox/exams/* — พบ *{d['count']} ไฟล์*\n"]
+        for f in d["files"]:
+            lines.append(f"  📄 `{f}`")
+        lines.append(f"\nพิมพ์ `/examall` เพื่อ ingest ทั้งหมด")
+        bot.reply_to(message, "\n".join(lines), parse_mode="Markdown")
+        return
+
+    if query.lower() in ["/examall", "/exam_all"]:
+        try:
+            r = _req.post(f"{CF_API}/ingest_exam_inbox", timeout=10)
+            r.raise_for_status()
+            data = r.json()
+        except Exception as e:
+            err = getattr(e, "response", None)
+            detail = err.json().get("detail", str(e)) if err else str(e)
+            bot.reply_to(message, f"❌ {detail}", parse_mode="Markdown")
+            return
+        session_id  = data["session_id"]
+        total_files = data.get("total_files", "?")
+        prog_msg = bot.reply_to(
+            message,
+            f"⏳ กำลัง ingest *{total_files} ไฟล์* จาก inbox/exams/...",
+            parse_mode="Markdown",
+        )
+        threading.Thread(
+            target=_poll_exam_progress,
+            args=(session_id, message.chat.id, prog_msg.message_id),
+            daemon=True,
+        ).start()
+        return
+
+    if query.lower() in ["/examdedup", "/exam_dedup"]:
+        try:
+            r = _req.post(f"{CF_API}/dedup_exam", timeout=120)
+            r.raise_for_status()
+            d = r.json()
+        except Exception as e:
+            bot.reply_to(message, f"❌ dedup error: {e}")
+            return
+        removed = d.get("removed", 0)
+        before  = d.get("before", 0)
+        after   = d.get("after", 0)
+        if removed == 0:
+            bot.reply_to(message, f"✅ ไม่พบข้อซ้ำ — KB มี {after} ข้อ ครบถ้วนแล้ว")
+        else:
+            bot.reply_to(
+                message,
+                f"✅ *Dedup เสร็จแล้ว*\n\n"
+                f"ก่อน: {before} ข้อ\n"
+                f"หลัง: *{after} ข้อ*\n"
+                f"ลบออก: *{removed} ข้อซ้ำ*",
+                parse_mode="Markdown",
+            )
         return
 
     # ── /ward — สกัด medical buzzwords จากใบส่งเวร ────────────────────────────

@@ -43,6 +43,7 @@ def _clear_status():
         pass
 
 from router import call_agent, load_prompt
+from examflow.image_utils import get_image_context_for_prompt
 
 # NotebookLM optional (graceful fallback ถ้ายังไม่ได้ตั้งค่า)
 try:
@@ -136,6 +137,11 @@ created: {date}
 ---
 """
 
+_SINGULAR_TYPE = {
+    "diseases": "disease", "drugs": "drug", "approaches": "approach",
+    "labs": "lab", "procedures": "procedure", "examinations": "examination",
+}
+
 PROCEDURE_TEMPLATE = """# Procedure - {topic}
 
 Tags: #procedure #{specialty}
@@ -180,33 +186,128 @@ Tags: #disease #{specialty}
 > [!tip] จำแบบนี้
 > ...
 
-## Definition & Classification
-...
+---
 
-## Pathophysiology
-[mechanism ที่เชื่อม basic science → clinical]
+## 1. Disease Profile
 
-## Clinical Presentation
+### Definition
+- นิยาม + เกณฑ์วินิจฉัย / threshold: ...
 
-**Pertinent Positives ที่ต้องถาม:**
-- ...
+### Epidemiology & Risk Factors
+- มักพบใน: [Age / Gender / กลุ่มเสี่ยงหลัก — 1-2 บรรทัด]
+- Risk factors หลัก: ...
+- Triggers (กำเริบ): ...
 
-**Pertinent Negatives สำคัญ:**
-- ...
+---
 
-**Physical Exam:**
-- ...
+## 2. Etiology & Pathophysiology
 
-## DDx
-| Diagnosis | Key differentiating feature |
+### Etiology
+*(VINDICATE: Vascular · Inflammatory · Neoplastic · Degenerative · Idiopathic · Congenital · Autoimmune · Trauma · Endocrine)*
+| สาเหตุ | ตัวอย่าง |
 |---|---|
 | ... | ... |
 
-## Investigation
-- [test] → [purpose] → [expected result]
+### Pathophysiology
+[mechanism หลัก → ความผิดปกติ → อาการที่เกิด]
+- กลไก: ...
+- → ผลที่เกิด: ...
+- → อาการทางคลินิก: ...
 
-## Management
+---
+
+## 3. Clinical Presentation
+
+### Symptoms (ประวัติ)
+- **Chief complaint:** ...
+- **Onset:** Acute / Subacute / Chronic
+- **Pertinent Positives:** ...
+- **Pertinent Negatives สำคัญ:** ...
+
+### Signs (ตรวจร่างกาย)
+- **Vital signs:** ...
+- **General:** ...
+- **Specific PE findings:** ...
+
+### Atypical Presentation
+> [!warning] ระวังในกลุ่มนี้
+> - **ผู้สูงอายุ:** ...
+> - **เบาหวาน:** ...
+> - **Immunocompromised:** ...
+
+### Severity / Scoring Assessment
+*(ใส่เสมอถ้าโรคนี้มี clinical score ที่ใช้ประเมินความรุนแรงจริงในเวชปฏิบัติ — เช่น sepsis, pancreatitis, pneumonia, cirrhosis, heart failure)*
+| Score | ใช้ทำอะไร | องค์ประกอบ / cutoff | แปลผล → action |
+|---|---|---|---|
+| <span class="threshold">[ชื่อ Score เต็ม]</span> | severity / disposition (OPD vs admit vs ICU) | [องค์ประกอบพร้อมค่าตัดจริง] | [range → mild/mod/severe + สิ่งที่ต้องทำต่อ] |
+
+---
+
+## 4. Differential Diagnosis
+
+### Most Likely
+| Dx | ทำไมน่าจะเป็น | Key differentiating feature |
+|---|---|---|
+| ... | ... | ... |
+
+### Must Not Miss ⚠️
+| Dx | ทำไมอันตราย | Clue ที่จะจับได้ |
+|---|---|---|
+| ... | ... | ... |
+
+---
+
+## 5. Investigations
+
+### Initial / First-line
+| Test | ทำไมส่ง | Expected result |
+|---|---|---|
+| ... | ... | ... |
+
+### Definitive / Gold Standard
+- **Gold standard:** [test] — [เหตุผล] [ข้อจำกัดในทางปฏิบัติ]
+
+### Monitoring Labs (Baseline / Follow-up)
+- [test] → [วัตถุประสงค์]
+
+---
+
+## 6. Management & Treatment
+
+### Acute Management (ER / Ward) — step-by-step ตามลำดับที่ทำจริงหน้างาน
+1. **Stabilization** — ABC / IV access / O2 ตามข้อบ่งชี้ พร้อม <span class="threshold">dose/rate</span> ถ้ามี
+2. **Definitive treatment** — <span class="management">ชื่อยา + dose + route + ความถี่ + ระยะเวลา</span> เต็ม (เช่น "IV Ceftriaxone 2 g OD x 4 สัปดาห์" ไม่ใช่แค่ "ให้ ATB") ระบุ 1st-line/alternative และเหตุผลเปลี่ยนยา (allergy, renal/hepatic function, culture result)
+3. **Escalation criteria** — เมื่อไหร่ต้อง ICU / surgery / consult specialist
+
+### Long-term / OPD Management
 1. ...
+
+### Specific Treatment
+| ยา | Dose | Route | ความถี่ | ระยะเวลา | Key SE | CI |
+|---|---|---|---|---|---|---|
+| ... | ... | ... | ... | ... | ... | ... |
+
+### Supportive / Symptomatic Care
+- ...
+
+### Non-pharmacological / Surgery Indication
+- **Lifestyle:** ...
+- **Surgery indication:** ...
+
+---
+
+## 7. Complications & Prognosis
+
+### Complications
+| ภาวะแทรกซ้อน | ป้องกัน/รักษา |
+|---|---|
+| ... | ... |
+
+### Prognosis & Prevention
+- Prognosis: [1 บรรทัด — mortality/morbidity ที่บอกผู้ป่วยได้]
+- Prevention: ...
+
+---
 
 ## High-Yield Exam Points
 - ...
@@ -239,81 +340,110 @@ DRUG_TEMPLATE = """# Drug - {topic}
 
 Tags: #drug #{drug_class}
 
+## 1. Class & Mechanism of Action
+
+- **Drug class:** ...
+- **MOA:** [กลไกหลักที่อธิบาย clinical effect ได้ — ไม่ต้องลึกถึง enzyme ยิบย่อย เว้นแต่สำคัญต่อ SE]
+
 ---
 
-## Class & MOA
+## 2. Clinical Indications
 
-| Class | ตัวยาหลัก | กลไก |
+| Indication | บทบาท | หมายเหตุ |
 |---|---|---|
-| **[class]** | [[drug]] | [mechanism → clinical effect] |
+| [[Disease]] | First-line / Alternative | ... |
+
+> [!tip] ดีเป็นพิเศษในกลุ่ม
+> [เช่น ACEi ใน DM + microalbuminuria, Beta-blocker ใน HFrEF]
 
 ---
 
-## Indications
+## 3. Dosing & Administration
 
-- **[[Disease]]** — เหตุผลที่ใช้ยานี้
-- ...
-
-> [!important] Key Decision — [จุดตัดสินใจสำคัญถ้ามี]
-> [เนื้อหา]
-
----
-
-## Dosing
-
-| Class | ยา | ขนาดเริ่มต้น | ขนาดสูงสุด | Route | ความถี่ |
+| Indication | Starting dose | Max dose | Route | Frequency | กับอาหาร? |
 |---|---|---|---|---|---|
-| [class] | [drug] | [start dose] | [max dose] | PO/SC/IV | OD/BID/... |
+| [indication] | [dose] | [max] | PO/IV/SC | OD/BID/... | ก่อน/หลัง/ไม่สัมพันธ์ |
+
+> [!note] วิธีให้ยา IV
+> Push / Drip ความเร็ว / เจือจางด้วย...
 
 ---
 
-## Dose Adjustment
+## 4. PK/PD & Dose Adjustment
 
-### Renal Impairment (eGFR)
+- **Clearance หลัก:** Renal / Hepatic / Mixed
+- **Half-life:** ...
 
-| ยา | eGFR [range] | eGFR < [threshold] |
+| สภาวะ | การปรับขนาดยา |
+|---|---|
+| eGFR 30–60 | ... |
+| eGFR 15–30 | ... |
+| eGFR < 15 / ESRD | ... |
+| Cirrhosis (Child B/C) | ... |
+
+---
+
+## 5. Adverse Drug Reactions
+
+### Common ADRs (ต้องบอกคนไข้ก่อน)
+| ADR | ความถี่ | จัดการ |
 |---|---|---|
-| **[drug]** | [adjustment] | [adjustment or ห้ามใช้] |
+| ... | บ่อย | ... |
 
-### Hepatic Impairment
+### Severe / Life-threatening (ต้องหยุดยา / board high-yield)
+| ADR | Mechanism | สังเกตจาก |
+|---|---|---|
+| ... | ... | ... |
 
-- **[drug]** — [คำแนะนำ]
+> [!warning] Antidote
+> [ถ้ามี — เช่น N-acetylcysteine สำหรับ Paracetamol, Protamine สำหรับ Heparin]
 
 ---
 
-## Key Side Effects
+## 6. Contraindications & Cautions
 
-| SE | Class | กลไก | Monitor |
+- **Absolute CI:** ...
+- **Relative cautions:** ...
+
+---
+
+## 7. Drug Interactions
+
+### Pharmacokinetic (CYP450 / absorption)
+| ยาที่ตีกัน | กลไก | ผลที่เกิด | จัดการ |
 |---|---|---|---|
-| **[SE]** | [class] | [mechanism] | [วิธี monitor] |
+| ... | CYP3A4 inhibitor/inducer / ลด absorption | ... | ... |
+
+### Pharmacodynamic (เสริมฤทธิ์/ต้านฤทธิ์)
+| ยาที่ตีกัน | ผลที่เกิด | จัดการ |
+|---|---|---|
+| ... | QT prolong / hypotension / hyperkalemia | ... |
 
 ---
 
-## Drug Interactions
+## 8. Monitoring Parameters
 
-**[Drug A] + [Drug B]**
-- กลไก: [mechanism]
-- จัดการ: [management]
+| Parameter | เวลาติดตาม | เป้าหมาย / เกณฑ์หยุดยา |
+|---|---|---|
+| **Efficacy:** [เช่น BP, fever, culture] | ... | ... |
+| **Toxicity:** [เช่น Cr, K+, LFT] | ... | ... |
 
 ---
 
-> [!tip] Clinical Pearl — [หัวข้อ]
-> [เนื้อหา]
+> [!tip] Clinical Pearl
+> ...
 
-> [!warning] Don't Miss — [หัวข้อ]
-> [เนื้อหา]
+> [!warning] Don't Miss
+> ...
 
 ---
 
 ## Attending Questions
 
-**Q: [คำถาม]**
-A: [คำตอบ bold จุดสำคัญ]
-
----
+**Q:** ...
+**A:** ...
 
 ## Related
-
 - [[...]]
 
 ---
@@ -414,6 +544,11 @@ SPECIALTY_MAP = {
     "Heart Failure": "cardiology", "ACS": "cardiology",
     "Atrial Fibrillation": "cardiology", "Pulmonary Embolism": "cardiology",
     "Hypertensive Crisis": "cardiology",
+    "Pericarditis": "cardiology", "Cardiac Tamponade": "cardiology",
+    "Supraventricular Tachycardia": "cardiology",
+    "Hypoglycemia": "endocrine",
+    "Pulmonary Tuberculosis": "infectious",
+    "Spontaneous Bacterial Peritonitis": "infectious",
     "AECOPD": "pulmonology", "Community Acquired Pneumonia": "pulmonology",
     "Pneumothorax": "pulmonology", "Pleural Effusion": "pulmonology",
     "Acute Kidney Injury": "nephrology", "Chronic Kidney Disease": "nephrology",
@@ -458,6 +593,7 @@ _STYLE_GUIDE = """
 - ใช้ - สำหรับ bullet list ทุกครั้ง ห้ามใช้ *
 - ใช้ K⁺ Na⁺ Ca²⁺ Mg²⁺ H⁺ ไม่ใช้ $K^+$ หรือ notation LaTeX
 - ห้ามใส่ $ ... $ หรือ \\ หรือ \frac หรือ syntax คณิตศาสตร์ใดๆ
+- ห้ามใช้ ~ แทน "ประมาณ" (เช่น ~30-40%, ~200mg) เด็ดขาด — เครื่องหมาย ~ คู่กันจะกลายเป็น strikethrough ทำให้เนื้อหาทั้งหมดระหว่างนั้นขีดฆ่าและ render พังทั้งไฟล์ ให้เขียนคำว่า "ประมาณ" เต็มแทนเสมอ
 """
 
 # ─── Parallel helper ─────────────────────────────────────────────────────────
@@ -515,7 +651,7 @@ def _best_knowledge(kb: str, research: str) -> str:
 
 # ─── Type-specific pipelines ─────────────────────────────────────────────────
 
-def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
+def _generate_disease_note(topic: str, template: str, kg_context: str, image_context: str = "") -> str:
     """
     Disease: researcher → [patho_agent ∥ drug_agent] → analyzer → formatter
     Claude calls: 3 (2 parallel + 1 sequential) | Gemini: 1
@@ -582,34 +718,67 @@ def _generate_disease_note(topic: str, template: str, kg_context: str) -> str:
 === KG Context ===
 {kg_context or "(ไม่มี)"}
 
+{image_context}
+
 {_STYLE_GUIDE}
 
 === คำสั่ง ===
-- เติมทุก section — ห้ามเว้นว่าง ห้ามใส่ "..."
-- Clinical Presentation: อิง patho อธิบายว่าทำไม sign/symptom นั้นจึงเกิด (arrow chain)
-- DDx: ใช้ table ระบุ key differentiating feature
-- Management: ใช้ dose จาก drug_agent (ห้าม hallucinate dose) — numbered steps — **ระบุ guideline ที่อ้างอิงทุก recommendation เช่น "(WHO 2024)", "(Thai DDC 2023)", "(AHA/ACC 2022)", "(KDIGO 2024)"**
-- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — pitfall / unusual presentation / key decision point ที่ unique ห้ามถาม definition พร้อมคำตอบที่ลึก
-- ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา หรือ approach อื่น
-- เพิ่ม section "## References" ท้าย note ระบุ guidelines ที่ใช้จริง: ชื่อ guideline, organization, ปี เช่น "- WHO Guidelines for the Treatment of Malaria, 3rd ed. 2015 (updated 2022)"
+เติมทุก section ตาม template — ห้ามเว้นว่าง ห้ามใส่ "..."
 
-High-Yield Exam Points (สำหรับสอบใบประกอบวิชาชีพไทย / ข้อสอบ ward):
-- Bullet 5–8 ข้อ เฉพาะ {topic} เท่านั้น
-- เน้น: classic presentation ที่ออกสอบบ่อย, ตัวเลข/threshold สำคัญที่ต้องจำ, distractors ที่พลาดบ่อย, first-line treatment ที่ถูกต้องตาม guideline, ข้อความที่ดูง่ายแต่ตอบผิดบ่อย
-- ห้าม copy จาก section อื่น ให้เน้นสิ่งที่ "ต้องจำ เพื่อทำข้อสอบถูก"
+**Section 1 — Disease Profile:**
+- Definition: diagnostic criteria / threshold ชัดเจน (เช่น BP ≥ 140/90, ANC < 500)
+- Epidemiology: กระชับ 1-2 บรรทัด — มักพบในใคร เพื่อช่วย pre-test probability เท่านั้น
+- Risk factors + Triggers: bullet สั้นๆ ไม่ต้องแยก Modifiable/Non-modifiable
 
-OSCE Checklist (structured สำหรับ OSCE station):
-- History: คำถามสำคัญเรียงตามลำดับที่ใช้จริงใน OSCE (ไม่ใช่ทุกคำถาม — เฉพาะที่ให้คะแนน)
-- Physical Exam: signs เฉพาะที่ examiner จะดูสำหรับ {topic} เรียงตาม system
-- Investigation: สั่ง test อะไรก่อน + อธิบาย 1 ประโยคว่าทำไม (สำหรับ OSCE viva)
-- Management & Counseling: outline การรักษา 3–5 ข้อ + จุดที่ต้องพูดกับผู้ป่วย (เช่น counseling สำหรับ surgery, ผลข้างเคียงยา, follow-up)
+**Section 2 — Etiology & Pathophysiology:**
+- Etiology: ใช้ VINDICATE เป็น framework คิด เฉพาะที่เกี่ยวข้องกับ {topic}
+- Pathophysiology: mechanism → ความผิดปกติ → อาการ เป็น arrow chain
 
+**Section 3 — Clinical Presentation:**
+- แยก Symptoms / Signs / Atypical ให้ชัด
+- Atypical: ต้องมีอย่างน้อยผู้สูงอายุ + อีก 1 กลุ่ม (เบาหวาน / immunocompromised)
+- Physical exam: เน้น finding ที่ confirm หรือ rule out DDx ได้
+- Severity/Scoring: ถ้าโรคนี้มี clinical score ที่ใช้จริง (เช่น Ranson's, CURB-65, Child-Pugh, qSOFA, Wells' score) ต้องใส่ตารางพร้อม cutoff ตัวเลขจริงและบอกว่า cutoff แต่ละช่วงต้อง action อะไรต่อ (OPD/admit/ICU) ห้ามเว้นว่างถ้าโรคมี score ที่ใช้จริง
+
+**Section 4 — DDx:**
+- Most Likely: ≥3 Dx พร้อม key differentiating feature
+- Must Not Miss: ≥2 life-threatening Dx ระบุ why dangerous + clue ที่จับได้
+
+**Section 5 — Investigations:**
+- First-line: เหตุผลที่ส่ง ไม่ใช่แค่ชื่อ test
+- Gold standard: ระบุข้อจำกัดทางปฏิบัติด้วย
+- Monitoring: test ที่ต้อง check ก่อนเริ่มยา หรือ follow response
+
+**Section 6 — Management:**
+- แยก Acute (ER/ward) vs Long-term (OPD) ชัดเจน
+- ใช้ dose จาก drug_agent — ห้าม hallucinate dose
+- ระบุ guideline ที่อ้างอิง เช่น "(AHA/ACC 2022)", "(Thai DDC 2023)", "(KDIGO 2024)"
+- Non-pharm: ต้องมี surgery indication ถ้าเกี่ยวข้อง
+
+**Section 7 — Complications & Prognosis:**
+- Complications table: ภาวะแทรกซ้อนสำคัญ + วิธีป้องกัน/รักษา (ไม่ต้องลง mechanism ลึก)
+- Prognosis + Prevention: กระชับ 1-2 บรรทัด ไม่ต้องลงสถิติละเอียด
+
+**High-Yield Exam Points:** 5–8 bullet เฉพาะ {topic}
+- เน้น: classic presentation / threshold / distractor ที่พลาดบ่อย / first-line ตาม guideline
+- ห้าม copy จาก section อื่น
+
+**OSCE Checklist:** structured สำหรับ OSCE station จริง
+- History: คำถามที่ให้คะแนน ไม่ใช่ทุกข้อ
+- PE: signs เฉพาะที่ examiner ดูสำหรับ {topic}
+- Investigation: สั่งอะไรก่อน + เหตุผล 1 ประโยค
+- Management & Counseling: จุดที่ต้องพูดกับผู้ป่วย (SE, follow-up, ข้อห้าม)
+
+**Attending Questions:** 3 ข้อ probe จุดเฉพาะ — pitfall / atypical / key decision — ห้ามถาม definition
+
+- ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรค ยา approach อื่น
+- เพิ่ม ## References ท้าย note — guideline + organization + ปี
 - Output เป็น Obsidian Markdown พร้อมใช้ทันที
 """,
     )
 
 
-def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
+def _generate_drug_note(topic: str, template: str, kg_context: str, image_context: str = "") -> str:
     """
     Drug: researcher → drug_agent → formatter
     Claude calls: 2 | Gemini: 1
@@ -643,19 +812,39 @@ def _generate_drug_note(topic: str, template: str, kg_context: str) -> str:
 {_STYLE_GUIDE}
 
 === คำสั่ง ===
-- MOA: อธิบาย mechanism → clinical effect อย่างชัดเจน
-- Dosing table: ครบทุก indication, dose range, route, frequency
-- Dose adjustment: renal + hepatic (ถ้าเกี่ยวข้อง)
-- Key SE table: SE ที่พบบ่อย + SE อันตราย + กลไก + monitoring
-- Drug interactions: อย่างน้อย 3 คู่สำคัญ + กลไก + วิธีจัดการ
-- Attending Questions: 3 ข้อที่ probe จุดเฉพาะของ {topic} — เลือกจาก pharmacology ที่ดูง่ายแต่ลึก / dose pitfall / drug interaction ที่อันตรายจริง / situation ที่ต้องตัดสินใจใช้หรือไม่ใช้ยา ห้ามถาม MOA แบบ textbook ตรงๆ พร้อมคำตอบที่ลึก
+เติมทุก section ตาม template — ห้ามเว้นว่าง ห้ามใส่ "..."
+
+**Section 1 — MOA:** concept ที่อธิบาย clinical effect ได้ ไม่ต้องลึกถึง enzyme ยิบย่อย เว้นแต่สำคัญต่อ SE
+
+**Section 2 — Indications:** ระบุบทบาท (first-line / alternative) + กลุ่มผู้ป่วยที่ยานี้ดีเป็นพิเศษ
+
+**Section 3 — Dosing:** standard starting dose per indication + route + frequency + food interaction (ถ้ามี)
+- ถ้า IV: ระบุ push/drip, ความเร็ว, สารละลายที่ใช้เจือจาง
+- ห้าม hallucinate dose — ใช้ข้อมูลจาก pharmacology context เท่านั้น
+
+**Section 4 — PK/PD & Dose Adjustment:**
+- ระบุ clearance pathway หลัก (Renal/Hepatic/Mixed) + half-life
+- Dose adjustment table: ตัดที่ eGFR เท่าไหร่ + Child-Pugh ถ้าเกี่ยวข้อง
+
+**Section 5 — ADRs:**
+- แยก Common (ต้องบอกคนไข้) vs Severe/life-threatening (ต้องหยุดยา/board high-yield)
+- ใส่ Antidote ถ้ามี
+
+**Section 6 — CI & Cautions:** แยก Absolute CI vs Relative cautions ชัดเจน
+
+**Section 7 — Drug Interactions:** แยก Pharmacokinetic (CYP450/absorption) vs Pharmacodynamic (additive/antagonist) อย่างน้อย 3 คู่สำคัญ
+
+**Section 8 — Monitoring:** แยก Efficacy monitoring vs Toxicity monitoring + เวลาที่ต้องติดตาม
+
+**Attending Questions:** 3 ข้อ — dose pitfall / drug interaction อันตราย / decision ใช้หรือไม่ใช้ในสถานการณ์เฉพาะ
+
 - ใส่ [[wikilinks]] ทุกครั้งที่กล่าวถึงโรคหรือยาอื่น
-- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที ตาม template
+- Output เป็น Obsidian Markdown ที่พร้อมใช้ทันที
 """,
     )
 
 
-def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
+def _generate_approach_note(topic: str, template: str, kg_context: str, image_context: str = "") -> str:
     """
     Approach: symptom_mapper → analyzer → formatter
     Claude calls: 1 | Gemini: 2
@@ -713,7 +902,7 @@ def _generate_approach_note(topic: str, template: str, kg_context: str) -> str:
     )
 
 
-def _generate_procedure_note(topic: str, template: str, kg_context: str) -> str:
+def _generate_procedure_note(topic: str, template: str, kg_context: str, image_context: str = "") -> str:
     """
     Procedure: researcher → analyzer → formatter
     """
@@ -758,7 +947,7 @@ def _generate_procedure_note(topic: str, template: str, kg_context: str) -> str:
     )
 
 
-def _generate_lab_note(topic: str, template: str, kg_context: str) -> str:
+def _generate_lab_note(topic: str, template: str, kg_context: str, image_context: str = "") -> str:
     """
     Lab: interpreter → analyzer → formatter
     Claude calls: 1 | Gemini: 2
@@ -858,8 +1047,11 @@ def generate_note(topic: str, topic_type: str, kg: "ClinicalKG" = None) -> str:
         lab_type=topic.lower().replace(" ", "_"),
     )
 
+    # Image context — visual findings + scoring diagrams
+    image_context = get_image_context_for_prompt(topic, resolve=True)
+
     generator = _GENERATORS.get(topic_type, _generate_disease_note)
-    return generator(topic, template_filled, combined_context)
+    return generator(topic, template_filled, combined_context, image_context)
 
 
 # ─── build_vault + MOC (unchanged logic) ─────────────────────────────────────
@@ -913,10 +1105,11 @@ def build_vault(output_dir: str, topics: dict = None, kg: "ClinicalKG" = None,
 
             try:
                 content = generate_note(topic, topic_type, kg)
+                singular = _SINGULAR_TYPE.get(topic_type, topic_type)
                 fm = _FRONTMATTER.format(
-                    type_tag=topic_type,
-                    specialty=topic_type,
-                    note_type=topic_type,
+                    type_tag=singular,
+                    specialty=SPECIALTY_MAP.get(topic, singular),
+                    note_type=singular,
                     date=datetime.now().strftime("%Y-%m-%d"),
                 )
                 with open(filepath, "w", encoding="utf-8") as f:

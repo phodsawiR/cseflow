@@ -63,6 +63,79 @@ def _load_exam_kb() -> dict | None:
         return json.load(f)
 
 
+_VALID_SPAN_CLASSES = {"must-know", "distractor", "management", "diagnosis", "threshold"}
+
+def _sanitize_wiki_url(url: str) -> str:
+    """Encode chars that break markdown URL parsing inside Wikimedia FilePath URLs."""
+    return re.sub(
+        r'(?<=FilePath/)(.+)',
+        lambda m: m.group(1)
+            .replace(" ", "_")
+            .replace("(", "%28")
+            .replace(")", "%29")
+            .replace(",", "%2C")
+            .replace("[", "%5B")
+            .replace("]", "%5D"),
+        url
+    )
+
+def _sanitize_caption(cap: str) -> str:
+    """Remove chars that break markdown image syntax inside alt text."""
+    return cap.replace('"', "'").replace("[", "(").replace("]", ")")[:100]
+
+_CLASS_REMAP = {
+    "disease":     "must-know",
+    "investigation": "diagnosis",
+    "keyword":     "must-know",
+    "concept":     "must-know",
+    "warning":     "distractor",
+    "drug":        "management",
+    "treatment":   "management",
+    "test":        "diagnosis",
+    "criteria":    "diagnosis",
+    "value":       "threshold",
+    "number":      "threshold",
+}
+
+def _postprocess(text: str) -> str:
+    """Deterministic cleanup of LLM output — ทำงานหลัง LLM generate เสมอ"""
+
+    # 1. unescape backslash-quoted spans (LLM sometimes outputs class=\"foo\" in markdown)
+    text = re.sub(r'<span class=\\"([^\\"]+)\\">', r'<span class="\1">', text)
+
+    # 2. remap invalid CSS classes → valid ones
+    def _fix_class(m):
+        cls = m.group(1)
+        if cls in _VALID_SPAN_CLASSES:
+            return m.group(0)
+        replacement = _CLASS_REMAP.get(cls, "must-know")
+        return f'<span class="{replacement}">'
+    text = re.sub(r'<span class="([^"]+)">', _fix_class, text)
+
+    # 2. remove remaining spans with still-invalid classes (safety net)
+    def _strip_invalid_span(m):
+        cls = m.group(1)
+        content = m.group(2)
+        return content if cls not in _VALID_SPAN_CLASSES else m.group(0)
+    text = re.sub(r'<span class="([^"]+)">(.*?)</span>', _strip_invalid_span, text)
+
+    # 3. remove ALL inline (พบใน ...) citations — only Exam References section should have them
+    text = re.sub(r'\s*\(พบใน [^)]+\)', '', text)
+
+    # 4. flatten nested spans — outer class wins
+    for _ in range(3):
+        text = re.sub(
+            r'<span class="([^"]+)">([^<]*)<span class="[^"]+">([^<]*)</span>([^<]*)</span>',
+            r'<span class="\1">\2\3\4</span>',
+            text
+        )
+
+    # 5. remove trailing bare ![[PDF]] embeds
+    text = re.sub(r'\n+!\[\[[^\]]+\.pdf[^\]]*\]\]\s*$', '', text.rstrip())
+
+    return text
+
+
 def _save_report(prefix: str, content: str) -> str:
     os.makedirs(REPORTS_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M")
@@ -88,7 +161,15 @@ def _parse_json_response(raw: str) -> dict:
     raw = raw.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```json?\n?|```$", "", raw, flags=re.MULTILINE).strip()
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # fallback: extract outermost {...} and retry
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end != -1:
+            return json.loads(raw[start:end + 1])
+        raise
 
 
 # ── Cache ─────────────────────────────────────────────────────────────────────
@@ -173,7 +254,14 @@ _TEXT_EXTRACT_PROMPT = """
       "key_points": ["key concept ที่อาจออกสอบ", ...],
       "diseases_mentioned": ["โรคที่กล่าวถึง", ...],
       "investigations_mentioned": ["investigation", ...],
-      "management_mentioned": ["การรักษา", ...]
+      "management_mentioned": ["การรักษา", ...],
+      "visual_findings": [
+        {
+          "finding": "ชื่อ visual finding (เช่น Ecthyma gangrenosum, Janeway lesions)",
+          "page": <เลขหน้าใน PDF ที่มีรูปนี้ หรือ null ถ้าไม่มีรูปในสไลด์>,
+          "context": "โรค/ภาวะที่เกี่ยวข้อง"
+        }
+      ]
     }
   ]
 }
@@ -181,6 +269,7 @@ _TEXT_EXTRACT_PROMPT = """
 กฎ:
 - แยกแต่ละโรค/หัวข้อหลักเป็น topic แยก
 - key_points เน้นสิ่งที่อาจออกสอบ (criteria, threshold, drug of choice, ข้อบ่งชี้)
+- visual_findings: ใส่เฉพาะ finding ที่ต้องเห็นรูปจริงเพื่อจำ (skin lesion, eye finding, rash, classic sign) — ถ้าไม่มีรูปสำคัญในหน้านี้ให้ใส่ []
 - ตอบเป็น JSON เท่านั้น ไม่มี markdown
 """
 
@@ -193,7 +282,11 @@ def _extract_text_mode(pdf_path: Path) -> dict:
     all_topics = []
     lecture_title = None
 
+    image_pages = None  # lazy-load only if needed for vision fallback
+
     for i in range(0, total_pages, batch_size):
+        batch_num = i // batch_size + 1
+        total_batches = -(-total_pages // batch_size)
         batch_text = "\n\n--- หน้า {} ---\n".format(i + 1).join(pages[i:i + batch_size])
         prompt = f"{_TEXT_EXTRACT_PROMPT}\n\nเนื้อหาสไลด์:\n{batch_text[:40000]}"
         try:
@@ -206,9 +299,27 @@ def _extract_text_mode(pdf_path: Path) -> dict:
             if not lecture_title and data.get("lecture_title"):
                 lecture_title = data["lecture_title"]
             all_topics.extend(data.get("topics", []))
-            print(f"  [text] batch {i // batch_size + 1}/{-(-total_pages // batch_size)} → {len(data.get('topics', []))} topics")
+            print(f"  [text] batch {batch_num}/{total_batches} → {len(data.get('topics', []))} topics")
         except Exception as e:
-            print(f"  [WARN] text batch {i // batch_size + 1} failed: {e}")
+            print(f"  [WARN] text batch {batch_num} failed: {e} — retrying with vision")
+            try:
+                if image_pages is None:
+                    image_pages = _pdf_to_images(pdf_path)
+                batch_imgs = image_pages[i:i + batch_size]
+                parts = [_gt.Part(inline_data=_gt.Blob(data=b, mime_type=m)) for b, m in batch_imgs]
+                parts.append(_gt.Part(text=_VISION_EXTRACT_PROMPT))
+                resp2 = _client.models.generate_content(
+                    model=_GEMINI_MODEL,
+                    contents=parts,
+                    config=_gt.GenerateContentConfig(max_output_tokens=8192),
+                )
+                data2 = _parse_json_response(resp2.text)
+                if not lecture_title and data2.get("lecture_title"):
+                    lecture_title = data2["lecture_title"]
+                all_topics.extend(data2.get("topics", []))
+                print(f"  [vision-retry] batch {batch_num} → {len(data2.get('topics', []))} topics")
+            except Exception as e2:
+                print(f"  [WARN] vision retry batch {batch_num} also failed: {e2}")
 
     return {"lecture_title": lecture_title, "topics": all_topics}
 
@@ -227,7 +338,14 @@ _VISION_EXTRACT_PROMPT = """
       "key_points": ["key concept 1", "key concept 2", ...],
       "diseases_mentioned": ["ชื่อโรคที่กล่าวถึง"],
       "investigations_mentioned": ["investigation ที่กล่าวถึง"],
-      "management_mentioned": ["การรักษาที่กล่าวถึง"]
+      "management_mentioned": ["การรักษาที่กล่าวถึง"],
+      "visual_findings": [
+        {
+          "finding": "ชื่อ visual finding (เช่น Ecthyma gangrenosum)",
+          "page": <เลขหน้าที่มีรูปนี้จริงๆ ในสไลด์>,
+          "context": "โรค/ภาวะที่เกี่ยวข้อง"
+        }
+      ]
     }
   ]
 }
@@ -235,6 +353,7 @@ _VISION_EXTRACT_PROMPT = """
 กฎ:
 - แยกแต่ละโรค/หัวข้อหลักเป็น topic แยก
 - key_points คือจุดสำคัญที่อาจออกสอบ
+- visual_findings: ใส่เฉพาะหน้าที่มีรูปภาพทางคลินิกจริง (skin lesion, rash, eye finding, X-ray, classic photo) — ต้องเห็นรูปเพื่อจำได้ ไม่ใช่แค่ diagram หรือตาราง
 - ตอบเป็น JSON เท่านั้น ไม่มี markdown
 """
 
@@ -321,6 +440,9 @@ def _extract_topics_from_pdf(pdf_path: Path, use_cache: bool = True) -> dict:
     if avg_chars >= _TEXT_MODE_THRESHOLD:
         print("text-mode (ประหยัด Vision API)")
         raw = _extract_text_mode(pdf_path)
+        if not raw.get("topics"):
+            print("  [fallback] text-mode returned 0 topics → switching to vision-mode")
+            raw = _extract_vision_mode(pdf_path)
     else:
         print("vision-mode (image-heavy slides)")
         raw = _extract_vision_mode(pdf_path)
@@ -340,7 +462,25 @@ def _extract_topics_from_pdf(pdf_path: Path, use_cache: bool = True) -> dict:
 
 # ── Step 2: Cross-reference with exam_kb ─────────────────────────────────────
 
+_FUZZY_STOPWORDS = {
+    # generic qualifiers
+    "disease", "syndrome", "disorder", "injury", "failure", "infection",
+    "acute", "chronic", "primary", "secondary", "induced", "related",
+    "upper", "lower", "type", "stage", "grade", "mild", "severe",
+    # organ systems (too broad for single-word match)
+    "liver", "renal", "cardiac", "pulmonary", "hepatic", "biliary",
+    # hematology-specific broad terms — these appear in many unrelated diseases
+    "anemia", "deficiency", "hereditary", "vitamin", "complement",
+    "subacute", "combined", "factor", "cold", "warm", "autoimmune",
+}
+
 def _fuzzy_match(name: str, kb_keys: list[str]) -> list[str]:
+    """
+    Match lecture topic → disease_index keys.
+    Priority: exact substring → 2+ content-word overlap.
+    Single-word overlap is intentionally disabled to prevent false positives
+    from broad terms like 'deficiency', 'anemia', 'hereditary'.
+    """
     name_l = name.lower()
     matched = []
     for key in kb_keys:
@@ -348,9 +488,10 @@ def _fuzzy_match(name: str, kb_keys: list[str]) -> list[str]:
         if name_l in key_l or key_l in name_l:
             matched.append(key)
             continue
-        name_words = {w for w in re.split(r'\W+', name_l) if len(w) > 3}
-        key_words  = {w for w in re.split(r'\W+', key_l)  if len(w) > 3}
-        if name_words & key_words:
+        name_words = {w for w in re.split(r'\W+', name_l) if len(w) > 3} - _FUZZY_STOPWORDS
+        key_words  = {w for w in re.split(r'\W+', key_l)  if len(w) > 3} - _FUZZY_STOPWORDS
+        # require ≥ 2 specific words to overlap — prevents single broad-term false matches
+        if name_words and key_words and len(name_words & key_words) >= 2:
             matched.append(key)
     return matched
 
@@ -360,11 +501,11 @@ def _cross_reference(lecture_data: dict, kb: dict) -> tuple[list, list]:
     q_by_id = {q["id"]: q for q in kb["questions"]}
     matched, unmatched = [], []
 
+    # ใช้เฉพาะ main topic names — ไม่รวม diseases_mentioned
+    # (diseases_mentioned คือโรคที่ mention ใน context ไม่ใช่โรคหลักของ topic)
     all_topic_names: set[str] = set()
     for t in lecture_data.get("topics", []):
         all_topic_names.add(t["topic"])
-        for d in t.get("diseases_mentioned", []):
-            all_topic_names.add(d)
 
     for topic_name in all_topic_names:
         hits = _fuzzy_match(topic_name, kb_keys)
@@ -399,6 +540,9 @@ def _cross_reference(lecture_data: dict, kb: dict) -> tuple[list, list]:
                       "key_management", "common_distractors"):
             agg[field] = list(dict.fromkeys(agg[field]))
 
+        # frequency = unique Q-IDs matched (not sum of KB entry frequencies which inflates)
+        agg["frequency"] = len(agg["question_ids"])
+
         agg["questions"] = [
             {
                 "id":            q["id"],
@@ -419,11 +563,83 @@ def _cross_reference(lecture_data: dict, kb: dict) -> tuple[list, list]:
     return matched, list(set(unmatched))
 
 
+# ── Step 2B: Find external images for visual findings without PDF pages ────────
+
+def _collect_visual_findings(lecture_data: dict, pdf_path: Path) -> list[dict]:
+    """รวม visual_findings ทุก topic + ใส่ pdf_page_embed ถ้ามีหน้า PDF"""
+    pdf_vault_rel = None
+    try:
+        pdf_vault_rel = pdf_path.resolve().relative_to(Path(OBSIDIAN_PATH).resolve())
+        pdf_vault_rel = str(pdf_vault_rel).replace("\\", "/")
+    except ValueError:
+        pass  # PDF ไม่ได้อยู่ใน vault (เช่น _copy_pdf_to_vault ยังไม่ได้รัน)
+
+    all_findings = []
+    seen = set()
+    for topic in lecture_data.get("topics", []):
+        for vf in topic.get("visual_findings", []):
+            key = vf.get("finding", "").lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            entry = {
+                "finding": vf.get("finding", ""),
+                "context": vf.get("context", ""),
+                "pdf_page": vf.get("page"),
+                "pdf_embed": f"![[{pdf_vault_rel}#page={vf['page']}]]" if pdf_vault_rel and vf.get("page") else None,
+                "external_url": None,
+            }
+            all_findings.append(entry)
+    return all_findings
+
+
+_MEDICAL_IMAGES_PATH = Path(__file__).parent / "medical_images.json"
+
+def _load_medical_images() -> dict:
+    try:
+        with open(_MEDICAL_IMAGES_PATH, encoding="utf-8") as f:
+            return json.load(f).get("findings", {})
+    except Exception:
+        return {}
+
+
+def _fetch_external_images(findings: list[dict]) -> list[dict]:
+    """
+    Static lookup เท่านั้น — ไม่ยิง researcher ไปเดา URL รูปจาก Wikimedia อีกต่อไป
+    เพราะ LLM มัก guess URL ที่ไม่มีจริง ทำให้ embed แตก/ไม่ขึ้นรูป
+    (pdf_embed จากสไลด์จริงคือแหล่งหลักที่เชื่อถือได้ — ดู _copy_pdf_to_vault)
+    """
+    static = _load_medical_images()
+
+    for f in findings:
+        if f["pdf_embed"]:
+            continue
+        key = f["finding"].lower()
+        # ค้น static lookup (exact + partial match) — เฉพาะ entry ที่ verify แล้วเท่านั้น
+        match = static.get(key)
+        if not match:
+            for k, v in static.items():
+                if k in key or key in k:
+                    match = v
+                    break
+        if match:
+            f["external_url"] = _sanitize_wiki_url(match["url"])
+            f["external_caption"] = _sanitize_caption(match.get("caption", f["finding"]))
+
+    return findings
+
+
 # ── Step 3: Generate summary ──────────────────────────────────────────────────
 
 def _generate_summary(lecture_data: dict, matched: list, unmatched: list,
+                      pdf_path: Path | None = None,
                       hints: list[str] | None = None) -> str:
     from router import call_agent
+
+    visual_findings = []
+    if pdf_path:
+        visual_findings = _collect_visual_findings(lecture_data, pdf_path)
+        visual_findings = _fetch_external_images(visual_findings)
 
     payload = {
         "lecture_title":    lecture_data.get("lecture_title") or "Lecture",
@@ -431,6 +647,7 @@ def _generate_summary(lecture_data: dict, matched: list, unmatched: list,
         "matched":          matched,
         "unmatched_topics": unmatched,
         "user_hints":       hints or [],
+        "visual_findings":  visual_findings,
     }
 
     print("  [aligner] lecture_aligner → summarizing...")
@@ -517,6 +734,14 @@ def run_lecture_bridge(pdf_path: str, title_override: str = "",
     if not pdf.exists():
         return f"[ERROR] ไม่พบไฟล์: {pdf_path}"
 
+    try:
+        pdf.resolve().relative_to(Path(OBSIDIAN_PATH).resolve())
+    except ValueError:
+        print(
+            f"  [WARN] {pdf.name} ไม่ได้อยู่ใน Obsidian vault ({OBSIDIAN_PATH})\n"
+            f"         → ![[...#page=N]] embed จะไม่ขึ้น ให้ย้าย PDF เข้า vault ก่อน (เช่นผ่าน OneNote export flow)"
+        )
+
     kb = _load_exam_kb()
     if not kb:
         return (
@@ -546,7 +771,11 @@ def run_lecture_bridge(pdf_path: str, title_override: str = "",
     print("[3/3] สร้างสรุปก่อนสอบ...")
     if hints:
         print(f"  [hints] {len(hints)} hints → aligner")
-    summary = _generate_summary(lecture_data, matched, unmatched, hints)
+    summary = _generate_summary(lecture_data, matched, unmatched, pdf_path=pdf, hints=hints)
+
+    # Post-process: fix CSS classes, remove inline citations
+    # (image/PDF-page embeds are inserted by the LLM itself via visual_findings — see lecture_aligner.md)
+    summary = _postprocess(summary)
 
     # Save
     safe_title   = re.sub(r"[^\w\-]", "_", lecture_data["lecture_title"])[:40]

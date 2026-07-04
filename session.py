@@ -1,8 +1,9 @@
 import json
 import os
+import concurrent.futures
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
-from router import call_agent, load_prompt
+from router import call_agent, load_prompt, format_cost_summary, clear_session_cost
 from notebooklm_client import query_from_source_plan
 import re
 from schemas import (
@@ -23,17 +24,29 @@ except ImportError:
     def _kg_drug_flags(text: str) -> str: return ""
 
 AVAILABLE_AGENTS = [
-    "kb_retrieval",
-    "researcher",
-    "analyzer",
-    "challenger",
-    "professor",
-    "drug_agent",
-    "interpreter",
-    "patho_agent",
-    "score_agent",
-    "formatter",
+    # Clinical agents
+    "kb_retrieval", "researcher", "analyzer", "challenger",
+    "professor", "drug_agent", "interpreter", "patho_agent",
+    "score_agent", "formatter",
+    # ExamFlow agents (route to G1-G6 pipeline)
+    "examflow_scope",    # G1 — ต้องอ่านอะไร
+    "examflow_analysis", # G2 — ออกอะไรบ่อย / pattern
+    "examflow_disease",  # G3 — สรุปโรคสำหรับสอบ
+    "examflow_vignette", # G4 — ออกโจทย์
+    "examflow_gap",      # G5 — ยังขาดอะไร
+    "examflow_ultra",    # G6 — สอบพรุ่งนี้
+    # Radiology
+    "xray_vocab_reporter",  # CXR vocabulary pool note → auto-save to Obsidian
 ]
+
+_EXAMFLOW_BRANCH_MAP = {
+    "examflow_scope":    "G1",
+    "examflow_analysis": "G2",
+    "examflow_disease":  "G3",
+    "examflow_vignette": "G4",
+    "examflow_gap":      "G5",
+    "examflow_ultra":    "G6",
+}
 
 BRANCH_LABELS: dict[str, str] = {
     "A": "Case Analysis (Full Pipeline)",
@@ -45,6 +58,14 @@ BRANCH_LABELS: dict[str, str] = {
     "G": "Admission Note (ใบขาว)",
     "N": "Note Narrative (แปล Note อ่านง่าย)",
     "U": "Freestyle / Omni",
+    # ── ExamFlow sub-branches ──────────────────────────────────────────────────
+    "H": "Note Blind Spot Checker (ตรวจจุดบอดใบเหลือง)",
+    "G1": "ExamFlow — Scope Query (ต้องรู้อะไรบ้าง)",
+    "G2": "ExamFlow — Exam Analysis (Pattern / เก็ง)",
+    "G3": "ExamFlow — Disease Summary (สรุปโรค)",
+    "G4": "ExamFlow — Vignette Generator (ออกโจทย์)",
+    "G5": "ExamFlow — Gap Detector (ยังขาดอะไร)",
+    "G6": "ExamFlow — Ultra Summary (สอบพรุ่งนี้)",
 }
 
 _CONFIRM_WORDS = {"ยืนยัน", "โอเค", "ใช่", "ok", "yes", "ใช้เลย", "confirm"}
@@ -60,9 +81,17 @@ def detect_branch(raw_input: str, default: str = "A") -> str:
 
     # 🌟 ด่านที่ 0: ดักจับคำสั่งบังคับ (Manual Override)
     # ถ้าพิมพ์ [Branch X] ระบบจะเคารพคำสั่งนี้ทันที ไม่สนเงื่อนไขอื่น!
-    override_match = re.search(r'\[branch\s*([a-gn])\]', text)
+    override_match = re.search(r'\[branch\s*([a-ghn])\]', text)
     if override_match:
         return override_match.group(1).upper()
+
+    # H: Note Blind Spot Checker — ตรวจจุดบอดใน progress note / ใบเหลือง
+    if any(k in text for k in [
+        "หาจุดบอด", "จุดบอด", "blind spot", "ตรวจ note",
+        "เช็ค note", "ควรซักเพิ่ม", "ตรวจสอบใบเหลือง", "note บกพร่อง",
+        "ขาดอะไรใน note", "ซักอะไรเพิ่ม",
+    ]):
+        return "H"
 
     # N: Note Narrative — แปล note ดิบที่มีคำย่อให้อ่านง่าย ตามลำดับเวลา
     if any(k in text for k in [
@@ -72,15 +101,22 @@ def detect_branch(raw_input: str, default: str = "A") -> str:
     ]):
         return "N"
 
-    # G: Admission Note (ใบขาว)
+    # ── ExamFlow: ไม่ auto-route G1-G6 — ใช้ Branch U (Omni) จัดการเอง ──────
+    # บังคับได้ด้วย [branch G3] override ด้านบน
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # G: Admission Note (ใบขาว) — เดิม ไม่เปลี่ยน
     if any(k in text for k in [
         "เขียนใบขาว", "admission note", "รายงานผู้ป่วย", "เขียนรายงาน", "ทำใบขาว"
     ]):
         return "G"
 
-    # D: Progress Note (ใบเหลือง / SOAP)
+    # D: Progress Note (ใบเหลือง / SOAP) — รวม H&P → SOAP
     if any(k in text for k in [
-        "เขียนใบเหลือง", "progress note", "เขียน note", "soap"
+        "เขียนใบเหลือง", "progress note", "เขียน note", "soap",
+        "เขียน soap", "ทำ soap", "สร้าง soap",
+        "history and physical", "h&p", "hpi",
+        "เขียนจาก", "แปลงเป็น soap", "ออกมาเป็น soap",
     ]) or (
         "s:" in text and "o:" in text and ("a:" in text or "a/p:" in text)
     ):
@@ -147,6 +183,7 @@ class CaseSession:
         self.patient_data: str = ""
         self.draft: str = ""
         self.qa_review: str = ""
+        self.last_cost_summary: str = ""
         self.version: int = 0
         self.branch: str = ""
         self.history: List[Dict[str, str]] = []           # Q&A history
@@ -248,7 +285,7 @@ class CaseSession:
 
         if stripped not in _CONFIRM_WORDS:
             # ตรวจ pattern ตัวอักษรตรงๆ: "D", "Branch D", "branch d"
-            direct_match = re.match(r'^(?:branch\s*)?([a-gnu])$', stripped)
+            direct_match = re.match(r'^(?:branch\s*)?(g[1-6]|[a-ghnu])$', stripped)
             if direct_match:
                 new_branch = direct_match.group(1).upper()
             else:
@@ -274,6 +311,8 @@ class CaseSession:
         self.draft = self._run_pipeline(self.patient_data, directives)
         self.version = 1
         self.qa_review = self._run_qa()
+        self.last_cost_summary = format_cost_summary(self.session_id)
+        clear_session_cost(self.session_id)
         self.save_state()
         return self.draft
 
@@ -297,7 +336,7 @@ class CaseSession:
     # REVISION: ตีกลับแก้เฉพาะส่วน
     # ─────────────────────────────────────────
     # Branch ที่ใช้ full re-run เมื่อรับ feedback (ไม่มี section structure)
-    _FULL_RERUN_BRANCHES = {"B", "C", "E", "F", "N"}
+    _FULL_RERUN_BRANCHES = {"B", "C", "E", "F", "H", "N", "U", "G1", "G2", "G3", "G4", "G5", "G6"}
 
     def revise(self, feedback: str) -> str:
         if self.branch in self._FULL_RERUN_BRANCHES:
@@ -316,6 +355,8 @@ class CaseSession:
             "target_agent": "full_rerun",
             "target_section": "all"
         })
+        self.last_cost_summary = format_cost_summary(self.session_id)
+        clear_session_cost(self.session_id)
         self.save_state()
         return self.draft
 
@@ -383,8 +424,9 @@ Instruction: {routing['instruction']}
     def approve(self) -> str:
         os.makedirs("reports", exist_ok=True)
         
-        # Obsidian Vault Path
-        vault_inbox = r"C:\Users\USER\Obsidian vault\00 - Inbox"
+        # Obsidian Vault Path — ใช้ env var, fallback ไปที่ path ที่มี
+        _vault_root = os.getenv("OBSIDIAN_VAULT_PATH", r"C:\Users\ASUS\Documents\Obsidian vault")
+        vault_inbox = os.path.join(_vault_root, "00 - Inbox")
         os.makedirs(vault_inbox, exist_ok=True)
 
         prefix_map = {
@@ -435,7 +477,7 @@ Instruction: {routing['instruction']}
             print(f"✅ Saved to Obsidian Vault: 00 - Inbox/{base_filename}")
             
             # บันทึก Log ลงใน Timeline Hub.md อัตโนมัติ
-            timeline_file = os.path.join(r"C:\Users\USER\Obsidian vault", "Timeline Hub.md")
+            timeline_file = os.path.join(_vault_root, "Timeline Hub.md")
             log_entry = f"- [[{datetime.now().strftime('%Y-%m-%d')}]] : สร้างไฟล์ [[{base_filename.replace('.md', '')}]] สำเร็จ (Branch: {prefix})\n"
             
             # เช็คว่ามีไฟล์ Timeline Hub หรือยัง ถ้าไม่มีให้สร้างพร้อม Header
@@ -475,21 +517,31 @@ Instruction: {routing['instruction']}
                     f"Revise the plan."
                 )
             )
-            revised = parse_llm_json(revised_raw)
-            self._pending_plan = revised if revised else plan
+            try:
+                revised = parse_llm_json(revised_raw)
+                if revised and revised.get("steps"):
+                    self._pending_plan = revised
+            except Exception as e:
+                print(f"[DEBUG] Replan parse error: {e}")
             self.save_state()
+
+            active_plan = self._pending_plan
+            steps_display = "\n".join(
+                f"  {s.get('step')}. [{s.get('agent')}] {s.get('instruction', '')[:100]}"
+                for s in active_plan.get("steps", [])
+            )
             return (
-                f"📋 แผนใหม่:\n{self._pending_plan.get('plan_summary', revised_raw)}"
-                f"\n\nพิมพ์ 'ยืนยัน' เพื่อดำเนินการ"
+                f"📋 แผนใหม่: {active_plan.get('goal', '')}\n"
+                f"{steps_display}\n\n"
+                f"พิมพ์ 'ยืนยัน' เพื่อดำเนินการ"
             )
 
         # Execute steps
-        MAX_STEPS = 5
         context: Dict[str, Any] = {"patient_data": self.patient_data}
         output_format = plan.get("output_format", "")
         result = ""
 
-        for step in plan.get("steps", [])[:MAX_STEPS]:
+        for step in plan.get("steps", []):
             agent = step.get("agent", "")
             instruction = step.get("instruction", "")
             input_var = step.get("input_var", "")
@@ -500,6 +552,20 @@ Instruction: {routing['instruction']}
                 continue
 
             input_data = context.get(input_var, self.patient_data) if input_var else self.patient_data
+
+            # ── ExamFlow agent → route to G-branch pipeline ──────────────────
+            if agent in _EXAMFLOW_BRANCH_MAP:
+                g_branch = _EXAMFLOW_BRANCH_MAP[agent]
+                print(f"[Omni→ExamFlow] {agent} → Branch {g_branch}")
+                try:
+                    from examflow.pipeline import run_examflow_branch
+                    step_result = run_examflow_branch(g_branch, input_data)
+                except Exception as e:
+                    print(f"[WARNING] ExamFlow {g_branch} failed: {e}")
+                    step_result = f"[ExamFlow error: {e}]"
+                context[output_var] = step_result
+                result = step_result
+                continue
 
             # formatter ใน Branch U ใช้ formatter_u (flexible) แทน formatter.md (Branch A)
             if agent == "formatter":
@@ -537,16 +603,107 @@ Instruction: {routing['instruction']}
             context[output_var] = step_result
             result = step_result
 
+            # ── xray_vocab_reporter → auto-save to Obsidian vault/radiology/ ──
+            if agent == "xray_vocab_reporter" and step_result and not step_result.startswith("[ERROR"):
+                try:
+                    _vault_root = os.getenv("OBSIDIAN_VAULT_PATH", r"C:\Users\ASUS\Documents\Obsidian vault")
+                    safe_topic = re.sub(r'[^\w\s-]', '', instruction[:40]).strip().replace(' ', '_') or "CXR_vocab"
+                    _ts = datetime.now().strftime("%Y%m%d_%H%M")
+                    _filename = f"CXR_vocab_{safe_topic}_{_ts}.md"
+                    _dest_dir = os.path.join(_vault_root, "radiology")
+                    os.makedirs(_dest_dir, exist_ok=True)
+                    with open(os.path.join(_dest_dir, _filename), "w", encoding="utf-8") as _f:
+                        _f.write(step_result)
+                    print(f"✅ [xray_vocab] Saved to Obsidian vault/radiology/{_filename}")
+                    result = step_result + f"\n\n---\n✅ บันทึกไปที่ Obsidian `vault/radiology/{_filename}`"
+                    context[output_var] = result
+                except Exception as _e:
+                    print(f"⚠️ [xray_vocab] Obsidian save failed: {_e}")
+
         self.draft = result
         self.version = 1
         self._pending_plan = None
         self.qa_review = self._run_qa()
+        self.last_cost_summary = format_cost_summary(self.session_id)
+        clear_session_cost(self.session_id)
         self.save_state()
         return result
 
     # ─────────────────────────────────────────
     # INTERNAL HELPERS
     # ─────────────────────────────────────────
+
+    def _run_branch_a_formatters(
+        self,
+        patient_data: str,
+        ddx: str,
+        gap: str,
+        research: str,
+        drug_info: str,
+        patho: str,
+        professor_output: str,
+        scores: str,
+        attending_out: str,
+        qa_feedback: str = "",
+    ) -> str:
+        """รัน 4 formatters พร้อมกัน (Step 5) — แต่ละตัวรับผิดชอบ 1 section แล้วรวมผล"""
+        qa_note = f"\n\n⚠️ QA Feedback — แก้ปัญหาเหล่านี้:\n{qa_feedback}" if qa_feedback else ""
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+            f_aug = ex.submit(
+                call_agent, "formatter_aug",
+                f"Patient Input (ข้อความเดิมของนักศึกษา):\n{patient_data}\n\n"
+                f"Working Diagnoses:\n{ddx}\n\n"
+                f"Gap Analysis:\n{gap}{qa_note}",
+            )
+            f_missing = ex.submit(
+                call_agent, "formatter_missing",
+                f"Gap Analysis:\n{gap}{qa_note}",
+            )
+            f_qa = ex.submit(
+                call_agent, "formatter_qa",
+                f"Attending Q&A:\n{attending_out}{qa_note}",
+            )
+            f_disease = ex.submit(
+                call_agent, "formatter_disease",
+                f"Working Diagnoses:\n{ddx}\n\n"
+                f"Clinical Reference:\n{research}\n\n"
+                f"Drug Info:\n{drug_info}\n\n"
+                f"Pathophysiology:\n{patho}\n\n"
+                f"Teaching Points:\n{professor_output}{qa_note}",
+            )
+
+        return (
+            f"{f_aug.result()}\n\n"
+            f"---\n\n## ส่วนที่ 2 — Clinical Scores\n\n{scores}\n\n"
+            f"---\n\n{f_missing.result()}\n\n"
+            f"---\n\n{f_qa.result()}\n\n"
+            f"---\n\n{f_disease.result()}"
+        )
+
+    def qa_revise(self, instruction: str = "") -> None:
+        """ตีกลับ — re-run Step 5 formatters พร้อม QA feedback"""
+        if self.branch != "A":
+            return
+        ctx = self._pipeline_context
+        self.draft = self._run_branch_a_formatters(
+            patient_data=self.patient_data,
+            ddx=ctx.get("ddx", ""),
+            gap=ctx.get("gap", ""),
+            research=ctx.get("research", ""),
+            drug_info=ctx.get("drug_info", ""),
+            patho=ctx.get("patho", ""),
+            professor_output=ctx.get("professor", ""),
+            scores=ctx.get("scores", ""),
+            attending_out=ctx.get("attending_qa", ""),
+            qa_feedback=instruction.strip() or self.qa_review,
+        )
+        self.version += 1
+        self.qa_review = self._run_qa()
+        self.last_cost_summary = format_cost_summary(self.session_id)
+        clear_session_cost(self.session_id)
+        self.save_state()
+
     def _run_qa(self) -> str:
         """รัน QA agent หลัง pipeline เสร็จ — ไม่ block ถ้า draft ว่าง"""
         if not self.draft or self._pending_plan is not None:
@@ -595,12 +752,12 @@ Instruction: {routing['instruction']}
             self._nav_result = NavigatorOutput(mode="full", branch="A", patient_data=raw_input, directives=[])
             return {"mode": "full", "branch": "A", "patient_data": raw_input, "directives": [], "parallel_tasks": []}
 
-    def _get_kb_sources(self, pi_checked: str) -> str:
+    def _get_kb_sources(self, note: str) -> str:
         """Helper: Source Finder -> RAG/researcher fallback + KG + Vault enrichment"""
         source_plan_raw = call_agent(
             "source_finder",
             system=load_prompt("source_finder"),
-            prompt=pi_checked
+            prompt=note
         )
 
         if source_plan_raw.startswith("[ERROR"):
@@ -619,11 +776,11 @@ Instruction: {routing['instruction']}
             source = call_agent(
                 "researcher",
                 system=load_prompt("researcher"),
-                prompt=f"Context: {pi_checked}\n\nKB Status: {source}"
+                prompt=f"Context: {note}\n\nKB Status: {source}"
             )
 
         # Enrich with PrimeKG facts + Obsidian vault context
-        enrichment = _kg_vault_enrich(pi_checked)
+        enrichment = _kg_vault_enrich(note)
         if enrichment:
             print("[enricher] KG + Vault context injected")
             source = source + enrichment
@@ -644,62 +801,103 @@ Instruction: {routing['instruction']}
             return "\n\n[USER DIRECTIVES - MUST FOLLOW]:\n" + "\n".join(f"- {i}" for i in items)
 
         # -----------------------------------------
-        # Branch A: Case Analysis (Full Pipeline)
+        # Branch A: Morning Round Prep
         # -----------------------------------------
         if self.branch == "A":
-            pi_checked = call_agent("pi_checker", prompt=patient_data)
-            source = self._get_kb_sources(pi_checked)
+            source = self._get_kb_sources(patient_data)
 
-            # Smart Router
-            router_raw = call_agent("smart_router", prompt=f"PI:\n{pi_checked}")
-            try:
-                router_result = SmartRouterOutput(**parse_llm_json(router_raw))
-            except Exception:
-                router_result = SmartRouterOutput(complexity="medium", spawn_professor=False)
-
-            # Parallel Tasks — drug_agent + patho_agent + score_agent เสมอ + tasks จาก navigator
-            nav_tasks = list(self._nav_result.parallel_tasks) if self._nav_result else []
-            always_on = ["drug_agent", "patho_agent", "score_agent"]
-            parallel_agents = nav_tasks + [t for t in always_on if t not in nav_tasks]
-
-            parallel_outputs: Dict[str, str] = {}
-            for task in parallel_agents:
-                base = f"Patient: {patient_data}\nSources: {source}\n{get_extras(task)}" if task == "drug_agent" else f"Patient: {patient_data}\n{get_extras(task)}"
-                parallel_outputs[task] = call_agent(task, prompt=base)
-            parallel_results = "".join(f"\n\n[{t.upper()}]:\n{r}" for t, r in parallel_outputs.items())
-
-            analysis = call_agent(
+            # Step 1: DDx Resolver — ระบุ working diagnoses
+            ddx = call_agent(
                 "analyzer",
-                prompt=f"PI: {pi_checked}\nSources: {source}{parallel_results}{get_extras('analyzer', True)}"
+                system=load_prompt("analyzer_a"),
+                prompt=f"Patient data:\n{patient_data}\n\nSources:\n{source}\n{get_extras('analyzer', True)}"
             )
-            kg_flags = _kg_drug_flags(pi_checked)
-            challenge = call_agent("challenger", prompt=f"Analysis: {analysis}\nSources: {source}{kg_flags}{get_extras('challenger')}")
-            synthesis = call_agent("reasoning_gate", prompt=f"A: {analysis}\nC: {challenge}")
-            if synthesis.startswith("[ERROR"):
-                print("[DEBUG] reasoning_gate failed, falling back to analyzer output")
-                synthesis = analysis
 
-            professor_output = call_agent("professor", prompt=f"Data: {patient_data}\nSynthesis: {synthesis}")
+            # Step 2: Parallel — expected findings + reference + drugs + patho
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                f_sign = ex.submit(
+                    call_agent, "sign_symptom_mapper",
+                    f"Working diagnoses:\n{ddx}"
+                )
+                f_research = ex.submit(
+                    call_agent, "researcher",
+                    f"Active problems and working diagnoses:\n{ddx}\n\n"
+                    f"สำหรับแต่ละ working dx ให้หา: staging system, diagnostic criteria, "
+                    f"key investigations to follow, treatment goals/targets, complications to watch"
+                )
+                f_drug = ex.submit(
+                    call_agent, "drug_agent",
+                    f"Patient:\n{patient_data}\n\nActive problems:\n{ddx}\n\nSources:\n{source}\n"
+                    f"ระบุยาที่เกี่ยวข้องกับแต่ละ problem: dose, monitoring parameters, timing, drug interactions ที่สำคัญ"
+                )
+                f_patho = ex.submit(
+                    call_agent, "patho_agent",
+                    f"Patient:\n{patient_data}\n\nWorking diagnoses:\n{ddx}"
+                )
+            sign_map = f_sign.result()
+            research = f_research.result()
+            drug_info = f_drug.result()
+            patho = f_patho.result()
+
+            # Step 3: Gap Analyzer — เปรียบเทียบ documented vs expected
+            gap = call_agent(
+                "gap_analyzer",
+                prompt=(
+                    f"Patient Data:\n{patient_data}\n\n"
+                    f"Working Diagnoses:\n{ddx}\n\n"
+                    f"Expected Clinical Findings:\n{sign_map}"
+                )
+            )
+
+            # Step 4: Parallel — scores + attending Q&A + professor
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+                f_scores = ex.submit(
+                    call_agent, "score_agent",
+                    f"Patient: {patient_data}\n\nActive problems and DDx:\n{ddx}\n"
+                    f"คำนวณ clinical prediction scores ที่ relevant กับ DDx ในเคสนี้"
+                )
+                f_attending = ex.submit(
+                    call_agent, "attending_qa",
+                    f"Working Diagnoses:\n{ddx}\n\n"
+                    f"Gap Analysis:\n{gap}\n\n"
+                    f"Clinical Reference:\n{research}\n\n"
+                    f"Drug Info:\n{drug_info}"
+                )
+                f_prof = ex.submit(
+                    call_agent, "professor",
+                    f"Patient:\n{patient_data}\n\nProblems:\n{ddx}\n\nClinical Reference:\n{research}"
+                )
+            scores = f_scores.result()
+            attending_out = f_attending.result()
+            professor_output = f_prof.result()
 
             self._pipeline_context = {
-                "source": source,
-                "drug_info": parallel_outputs.get("drug_agent", ""),
-                "score_result": parallel_outputs.get("score_agent", ""),
+                "source": research,
+                "drug_info": drug_info,
+                "ddx": ddx,
+                "sign_map": sign_map,
+                "gap": gap,
+                "research": research,
+                "patho": patho,
+                "professor": professor_output,
+                "scores": scores,
+                "attending_qa": attending_out,
             }
-            formatter_input = f"{synthesis}\n\nTeaching Points:\n{professor_output}{get_extras('formatter', True)}"
-            return call_agent("formatter", prompt=formatter_input)
+            return self._run_branch_a_formatters(
+                patient_data, ddx, gap, research, drug_info, patho, professor_output,
+                scores, attending_out
+            )
 
         # -----------------------------------------
         # Branch D: Progress Note (ใบเหลือง)
         # -----------------------------------------
         elif self.branch == "D":
-            pi_checked = call_agent("pi_checker", prompt=patient_data)
-            source = self._get_kb_sources(pi_checked)
+            source = self._get_kb_sources(patient_data)
             report = call_agent("report_architect", prompt=f"Data: {patient_data}\nSources (ใช้ประกอบการวิเคราะห์ DDx และ Plan for diagnosis):\n{source}\n{get_extras('report_architect')}")
             drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nDiscussion draft: {report}\nระบุยาที่เกี่ยวข้องกับแต่ละ problem: dose, renal/hepatic adjustment, monitoring parameters, drug interactions.")
             score_result = call_agent("score_agent", prompt=f"Patient: {patient_data}\nDiscussion draft: {report}\nคำนวณ clinical prediction scores ที่ระบุใน A section เช่น Wells, Geneva, CURB-65, TIMI พร้อม interpretation.")
             analysis = call_agent("analyzer", prompt=f"Draft: {report}\nSources: {source}\nDrug review: {drug_info}\nClinical scores: {score_result}{get_extras('analyzer')}")
-            kg_flags = _kg_drug_flags(pi_checked)
+            kg_flags = _kg_drug_flags(patient_data)
             challenge = call_agent("challenger", prompt=f"Draft: {report}\nAnalysis: {analysis}\nSources: {source}{kg_flags}{get_extras('challenger')}")
 
             self._pipeline_context = {"source": source, "drug_info": drug_info, "score_result": score_result}
@@ -766,8 +964,7 @@ Instruction: {routing['instruction']}
         # Branch G: Admission Note (ใบขาว)
         # -----------------------------------------
         elif self.branch == "G":
-            pi_checked = call_agent("pi_checker", prompt=patient_data)
-            source = self._get_kb_sources(pi_checked)
+            source = self._get_kb_sources(patient_data)
             drug_info = call_agent("drug_agent", prompt=f"Patient: {patient_data}\nSources: {source}\nList complete medication history, current drugs on admission, new drugs to start, dosage adjustments for renal/hepatic function.")
             lab_interp = call_agent("interpreter", prompt=f"Patient: {patient_data}\nInterpret all baseline lab values, ECG, imaging findings. Classify severity and clinical significance.")
             patho = call_agent("patho_agent", prompt=f"Patient: {patient_data}\nExplain pathophysiology of primary diagnosis and top DDx relevant to this admission.")
@@ -782,7 +979,7 @@ Instruction: {routing['instruction']}
             prof = call_agent("professor", prompt=f"Data: {patient_data}\nSynthesis: {synthesis}")
 
             self._pipeline_context = {"source": source, "drug_info": drug_info, "score_result": score_result}
-            formatter_input = f"PI: {pi_checked}\nSynthesis: {synthesis}\nDrug history: {drug_info}\nLab interpretation: {lab_interp}\nPathophysiology: {patho}\nClinical scores: {score_result}\nProf: {prof}\nFlags: {challenge}{get_extras('formatter', True)}"
+            formatter_input = f"PI: {patient_data}\nSynthesis: {synthesis}\nDrug history: {drug_info}\nLab interpretation: {lab_interp}\nPathophysiology: {patho}\nClinical scores: {score_result}\nProf: {prof}\nFlags: {challenge}{get_extras('formatter', True)}"
             return call_agent("formatter", system=load_prompt("formatter_a_chula"), prompt=formatter_input)
         
         # -----------------------------------------
@@ -798,15 +995,13 @@ Instruction: {routing['instruction']}
         # Branch N: Note Narrative (แปล Note อ่านง่าย)
         # -----------------------------------------
         elif self.branch == "N":
-            pi_checked = call_agent("pi_checker", prompt=patient_data)
-
             # ขั้น 1: Interpreter ขยายคำย่อ + แปลค่า lab/vital ทั้งหมด
             expanded = call_agent(
                 "interpreter",
                 prompt=(
                     f"ขยายทุกคำย่อทางการแพทย์ให้เป็นภาษาเต็ม และแปลค่า lab / vital signs "
                     f"ให้เป็นภาษาที่อ่านเข้าใจง่าย โดยระบุ normal range และ clinical significance สั้นๆ\n\n"
-                    f"Note:\n{pi_checked}"
+                    f"Note:\n{patient_data}"
                 )
             )
 
@@ -871,11 +1066,49 @@ Instruction: {routing['instruction']}
                 f"\n\nพิมพ์ 'ยืนยัน' เพื่อดำเนินการ หรือบอกสิ่งที่ต้องการเปลี่ยนแปลง"
             )
 
+        # -----------------------------------------
+        # Branch H: Note Blind Spot Checker
+        # -----------------------------------------
+        elif self.branch == "H":
+            blind_spots = call_agent(
+                "blind_spot_checker",
+                prompt=f"Progress Note:\n{patient_data}\n{get_extras('blind_spot_checker', True)}"
+            )
+
+            teaching = call_agent(
+                "professor",
+                prompt=(
+                    f"Progress Note:\n{patient_data}\n\n"
+                    f"Blind spot analysis:\n{blind_spots}\n\n"
+                    f"อธิบายเหตุผลทางคลินิกและ teaching points ของจุดบอดที่สำคัญในเคสนี้ "
+                    f"เน้นว่าถ้าพลาดจุดเหล่านี้จะมีผลอย่างไรต่อ diagnosis และ management"
+                )
+            )
+
+            self._pipeline_context = {"source": blind_spots}
+            return call_agent(
+                "formatter",
+                system=load_prompt("formatter_h"),
+                prompt=(
+                    f"Progress Note:\n{patient_data}\n\n"
+                    f"Blind spot analysis:\n{blind_spots}\n\n"
+                    f"Teaching points:\n{teaching}"
+                    f"{get_extras('formatter', True)}"
+                )
+            )
+
+        # -----------------------------------------
+        # Branch G1–G6: ExamFlow
+        # -----------------------------------------
+        elif self.branch in ("G1", "G2", "G3", "G4", "G5", "G6"):
+            from examflow.pipeline import run_examflow_branch
+            return run_examflow_branch(self.branch, patient_data, directives)
+
         else:
             return f"[System: Branch {self.branch} under construction.]"
 
     def _build_context(self, question: str) -> str:
-        history_text = "\n".join([f"Q: {h['q']}\nA: {h['a']}" for h in self.history[-3:]]) if self.history else ""
+        history_text = "\n".join([f"Q: {h['q']}\nA: {h['a']}" for h in self.history[-6:]]) if self.history else ""
         return f"Data: {self.patient_data}\n\nDraft: {self.draft}\n\nHistory:\n{history_text}\n\nNew Q: {question}"
 
     def _extract_section(self, draft: str, section: str) -> str:

@@ -760,7 +760,8 @@ async def lecture_bridge_upload(
                 def flush(self): pass
             sys.stdout = _StepWriter()
             try:
-                result = run_lecture_bridge(
+                result = await asyncio.to_thread(
+                    run_lecture_bridge,
                     str(dest),
                     title_override=title or "",
                     hints=hints_list or None,
@@ -1443,8 +1444,9 @@ def _run_agent_sync(chat_id: str, messages: list, history: list) -> None:
                 try:
                     resp = await asyncio.to_thread(
                         lambda m=messages: _claude_client.messages.create(
-                            model="claude-sonnet-4-6",
-                            max_tokens=8192,
+                            model="claude-sonnet-5",
+                            max_tokens=16384,
+                            thinking={"type": "adaptive"},
                             system=_AGENT_SYSTEM,
                             tools=_TOOLS,
                             messages=m,

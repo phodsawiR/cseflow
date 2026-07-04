@@ -15,10 +15,11 @@ claude        = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 gemini_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # ── Model IDs ──────────────────────────────────────────────────────────────────
-_CLAUDE_MODEL          = "claude-sonnet-4-6"
-_GEMINI_LATEST_MODEL   = "gemini-3.5-flash"   # newest frontier-class (May 2026)
-_GEMINI_THINKING_MODEL = "gemini-3.1-pro-preview"  # latest Pro — extended thinking
-_GEMINI_FLASH_MODEL    = "gemini-3.5-flash"    # fast structured tasks (same base as latest)
+_CLAUDE_MODEL          = "claude-sonnet-5"
+_GEMINI_LATEST_MODEL   = "gemini-3.5-flash"      # newest frontier-class (May 2026)
+_GEMINI_THINKING_MODEL = "gemini-3.1-pro-preview" # latest Pro — extended thinking
+_GEMINI_3_FLASH_MODEL  = "gemini-3-flash-preview" # Gemini 3 Flash — mid tier
+_GEMINI_FLASH_MODEL    = "gemini-2.5-flash"       # fast structured tasks (cheapest)
 
 # ── Progress tracking ──────────────────────────────────────────────────────────
 _current_session: ContextVar[str] = ContextVar("current_session", default="")
@@ -27,11 +28,12 @@ _step_log: dict[str, list] = {}
 # ── Cost tracking ──────────────────────────────────────────────────────────────
 # Pricing per 1M tokens (USD) — update if Google/Anthropic changes rates
 _COST_TABLE: dict[str, dict] = {
-    "claude":             {"in":  3.00, "out": 15.00, "think": 0.0},   # Sonnet 4.6
+    "claude":             {"in":  3.00, "out": 15.00, "think": 0.0},   # Sonnet 5 (thinking tokens already counted in usage.output_tokens)
     "gemini-thinking":    {"in":  1.25, "out": 10.00, "think": 3.50},  # Gemini Pro thinking
     "gemini-latest":      {"in":  0.15, "out":  0.60, "think": 0.0},   # Gemini 3.5 Flash
     "gemini-latest-grnd": {"in":  0.15, "out":  0.60, "think": 0.0},   # Gemini 3.5 Flash + Search
-    "gemini-flash":       {"in": 0.075, "out":  0.30, "think": 0.0},   # Gemini Flash fast
+    "gemini-3-flash":     {"in": 0.075, "out":  0.30, "think": 0.0},   # Gemini 3 Flash Preview (mid)
+    "gemini-flash":       {"in": 0.075, "out":  0.30, "think": 0.0},   # Gemini 2.5 Flash (fast)
     "ollama":             {"in":  0.0,  "out":  0.0,  "think": 0.0},   # local — free
 }
 _THB_PER_USD = 36.0
@@ -124,12 +126,16 @@ AGENT_MODELS: Dict[str, str] = {
     "patho_agent":       "gemini-latest-grnd",  # pathophysiology + recent updates
     "kb_retrieval":      "gemini-latest-grnd",  # RAG → web fallback
 
-    # ── Gemini 3.5 Flash (latest, no grounding): complex tasks ───────────────
-    "symptom_mapper":    "gemini-latest",       # systematic symptom approach
-    "round_coach":       "gemini-latest",       # morning round coaching
-    "professor":         "gemini-latest",       # teaching points + questions
-    "query_agent":       "gemini-latest",       # knowledge Q&A (Branch B)
-    "approach_flowchart": "gemini-latest",      # Mermaid mindmap generation (Branch C)
+    # ── Gemini 3 Flash Preview (mid tier): clinical tasks ────────────────────
+    "symptom_mapper":    "gemini-3-flash",      # systematic symptom approach
+    "round_coach":       "gemini-3-flash",      # morning round coaching
+    "professor":         "gemini-3-flash",      # teaching points + questions
+    "query_agent":       "gemini-3-flash",      # knowledge Q&A (Branch B)
+    "approach_flowchart": "gemini-3-flash",     # Mermaid mindmap generation (Branch C)
+    "sign_symptom_mapper": "gemini-3-flash",    # Step 2: DDx → expected signs/symptoms/PE
+    "gap_analyzer":        "gemini-3-flash",    # Step 3: compare documented vs expected
+    "formatter_aug":     "gemini-3-flash",      # Section 1: inline augmentation
+    "formatter_disease": "gemini-3-flash",      # Section 5: disease quick reference
 
     # ── Gemini 2.5 Flash: fast structured tasks ───────────────────────────────
     "smart_router":      "gemini-flash",        # complexity routing decision
@@ -138,15 +144,9 @@ AGENT_MODELS: Dict[str, str] = {
     "report_architect":  "gemini-flash",        # SOAP structure planning
     "score_agent":       "gemini-flash",        # clinical score calculation
     "omni_executor":     "gemini-flash",        # plan step fallback executor
-    # ── Branch A: reasoning chain (Steps 2–4) ────────────────────────────────
-    "sign_symptom_mapper": "gemini-latest",     # Step 2: DDx → expected signs/symptoms/PE
-    "gap_analyzer":        "gemini-latest",     # Step 3: compare documented vs expected
-    "attending_qa":        "claude",            # Step 4: generate attending's Q&A
-    # ── Branch A split formatters (Step 5) ───────────────────────────────────
-    "formatter_aug":     "gemini-latest",       # Section 1: inline augmentation
+    "attending_qa":      "claude",              # Step 4: generate attending's Q&A
     "formatter_missing": "gemini-flash",        # Section 3: missing critical list (just present)
     "formatter_qa":      "gemini-flash",        # Section 4: format attending_qa output (just present)
-    "formatter_disease": "gemini-latest",       # Section 5: disease quick reference
 
     # ── Local: never leaves machine ───────────────────────────────────────────
     "pi_checker":        "ollama",              # patient info anonymization
@@ -159,7 +159,7 @@ AGENT_MODELS: Dict[str, str] = {
     "examflow_pattern":    "gemini-flash",     # pattern / trend analysis (G2)
     "examflow_distractor": "gemini-flash",     # distractor analysis (G2)
     "examflow_gap":        "gemini-flash",     # vault gap detection (G5)
-    "examflow_lecture":    "gemini-flash",     # lecture-exam bridge summary (G8)
+    "examflow_lecture":    "claude",            # lecture-exam bridge summary (G8)
 
     # ── ExamFlow: complex synthesis → claude ──────────────────────────────────
     "examflow_disease":    "claude",           # disease architect + vignette writer (G3/G4/G6)
@@ -201,14 +201,18 @@ def _log_step(sid: str, agent: str, status: str, detail: str = "") -> None:
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def _call_claude(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Claude/{_CLAUDE_MODEL}): Requesting...")
-    response = claude.messages.create(
+    # max_tokens=32000 non-streaming trips the SDK's >10min safety guard (ValueError) — stream instead
+    with claude.messages.stream(
         model=_CLAUDE_MODEL,
-        max_tokens=16384,
+        max_tokens=32000,
+        thinking={"type": "adaptive"},
         system=system,
         messages=[{"role": "user", "content": prompt}],
-    )
+    ) as stream:
+        response = stream.get_final_message()
     _log_cost("claude", response.usage.input_tokens, response.usage.output_tokens)
-    return response.content[0].text
+    text_blocks = [b.text for b in response.content if b.type == "text"]
+    return "".join(text_blocks)
 
 
 # ── Gemini streaming helper ────────────────────────────────────────────────────
@@ -309,6 +313,17 @@ def _call_gemini_latest_no_grounding(agent_name: str, prompt: str, system: str) 
 # ── Gemini 2.5 Flash — fast structured tasks ──────────────────────────────────
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8))
+def _call_gemini_3_flash(agent_name: str, prompt: str, system: str) -> str:
+    print(f"[router] {agent_name} (Gemini-3-flash/{_GEMINI_3_FLASH_MODEL}): Requesting...")
+    content = f"{system}\n\n{prompt}" if system else prompt
+    text, um = _stream_gemini(_GEMINI_3_FLASH_MODEL, content)
+    _log_cost("gemini-3-flash",
+              (um.prompt_token_count or 0) if um else 0,
+              (um.candidates_token_count or 0) if um else 0)
+    return text
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=8))
 def _call_gemini_flash(agent_name: str, prompt: str, system: str) -> str:
     print(f"[router] {agent_name} (Gemini-flash/{_GEMINI_FLASH_MODEL}): Requesting...")
     content = f"{system}\n\n{prompt}" if system else prompt
@@ -339,6 +354,7 @@ _DISPATCH = {
     "gemini-thinking":    _call_gemini_thinking,
     "gemini-latest":      _call_gemini_latest,
     "gemini-latest-grnd": _call_gemini_latest_grounded,
+    "gemini-3-flash":     _call_gemini_3_flash,
     "gemini-flash":       _call_gemini_flash,
     "ollama":             _call_ollama,
 }
@@ -379,11 +395,12 @@ def call_agent(agent_name: str, prompt: str, system: str = "") -> str:
 # ── Cost summary (public) ──────────────────────────────────────────────────────
 
 _MODEL_LABELS = {
-    "claude":             "Claude Sonnet 4.6",
+    "claude":             "Claude Sonnet 5",
     "gemini-thinking":    "Gemini Pro (thinking)",
     "gemini-latest":      "Gemini 3.5 Flash",
     "gemini-latest-grnd": "Gemini 3.5 Flash (grounded)",
-    "gemini-flash":       "Gemini Flash (fast)",
+    "gemini-3-flash":     "Gemini 3 Flash Preview",
+    "gemini-flash":       "Gemini 2.5 Flash (fast)",
     "ollama":             "Ollama (local)",
 }
 

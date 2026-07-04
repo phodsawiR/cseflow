@@ -759,57 +759,172 @@ code.inline { background: #f1f5f9; color: var(--indigo); padding: 2px 6px; borde
   </div>
 
   <div class="grid-3">
-    <div class="feat-card blue"><div class="feat-icon">🤖</div><div class="feat-title">Agent Mode</div><div class="feat-sub">Claude คิดเอง เรียก tools เอง</div></div>
-    <div class="feat-card purple"><div class="feat-icon">🎓</div><div class="feat-title">ExamFlow</div><div class="feat-sub">สรุปโรค · เก็ง · ออกโจทย์</div></div>
-    <div class="feat-card green"><div class="feat-icon">📥</div><div class="feat-title">Knowledge</div><div class="feat-sub">ข้อสอบ · lecture · ตำรา</div></div>
+    <div class="feat-card blue"><div class="feat-icon">🏥</div><div class="feat-title">Ward Branches</div><div class="feat-sub">A B C D E F G H N — ใช้บน ward จริง</div></div>
+    <div class="feat-card purple"><div class="feat-icon">🎓</div><div class="feat-title">ExamFlow G1–G8</div><div class="feat-sub">scope · pattern · สรุปโรค · vignette · gap · lecture</div></div>
+    <div class="feat-card green"><div class="feat-icon">🗂️</div><div class="feat-title">Vault Builder</div><div class="feat-sub">สร้าง Obsidian notes — diseases · drugs · approaches</div></div>
   </div>
 
+  <!-- WARD BRANCHES -->
   <div class="card">
-    <div class="card-title">🤖 Agent Mode — พิมพ์แล้วปล่อยให้ Claude จัดการ</div>
-    <div class="sec-label">ตัวอย่างที่พิมพ์ได้</div>
-    <div class="example-row">ข้อสอบออกเรื่องไหนบ่อย / น่าจะออกอะไรปีนี้</div>
-    <div class="example-row">สรุปโรค HIV สำหรับสอบ</div>
-    <div class="example-row">สอบพรุ่งนี้ Pulmonary embolism</div>
-    <div class="example-row">ออกโจทย์ SLE ให้หน่อย</div>
-    <div class="example-row">ยังขาดอะไรบ้าง</div>
-    <div class="example-row">ชาย 55 ปี เหนื่อยหอบ 3 วัน CXR cardiomegaly...</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:10px">
-      💡 Agent ใช้ tools: get_kb_summary · get_disease_info · run_examflow_pipeline · search_medical_kb
+    <div class="card-title">🏥 Ward Branches — ใช้บน ward</div>
+    <table class="cmd-tbl">
+      <tr><th>Branch</th><th>ชื่อ</th><th>ใช้เมื่อ</th><th>วิธีเรียก</th></tr>
+      <tr>
+        <td><span class="badge badge-blue">A</span></td>
+        <td>Case Analysis</td>
+        <td>DDx เต็ม — วิเคราะห์เคส หา diagnosis</td>
+        <td>วาง PI/note ไว้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">B</span></td>
+        <td>Knowledge Query</td>
+        <td>ถามความรู้จาก KB / ตำรา</td>
+        <td><code class="inline">[branch B] อธิบาย ARDS</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">C</span></td>
+        <td>Symptom Approach</td>
+        <td>approach อาการ — DDx framework + flowchart</td>
+        <td><code class="inline">[branch C] dyspnea</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">D</span></td>
+        <td>Progress Note</td>
+        <td>เขียน SOAP note / ใบเหลือง</td>
+        <td>วาง progress note ไว้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">E</span></td>
+        <td>Morning Round</td>
+        <td>เตรียม round — drug · lab · แผนวันนี้</td>
+        <td>วาง SOAP ของผู้ป่วยไว้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">F</span></td>
+        <td>Lab / EKG</td>
+        <td>แปลผล lab pattern หรือ EKG</td>
+        <td><code class="inline">[branch F] Na 118 K 5.8 pH 7.28</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">G</span></td>
+        <td>Admission Note</td>
+        <td>เขียนใบขาว Chula format ครบ</td>
+        <td>วาง PI + note ไว้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-orange">H</span></td>
+        <td>Note Blind Spot</td>
+        <td>ตรวจจุดบอด — ซักอะไรขาด PE อะไรพลาด</td>
+        <td><code class="inline">หาจุดบอด [paste note]</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">N</span></td>
+        <td>Note Narrative</td>
+        <td>เขียน narrative / referral letter</td>
+        <td>วาง note ไว้</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">U</span></td>
+        <td>Freestyle / Omni</td>
+        <td>ทุกอย่างที่ไม่ fit branch อื่น — Claude วางแผนเอง</td>
+        <td>พิมพ์อะไรก็ได้</td>
+      </tr>
+    </table>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">
+      บังคับ branch: <code class="inline">[branch G3] สรุป SLE</code> &nbsp;|&nbsp;
+      Agent mode: พิมพ์ธรรมดา Claude detect เอง
     </div>
   </div>
 
+  <!-- EXAMFLOW -->
   <div class="card">
-    <div class="card-title">🏥 CaseFlow Branches (Pipeline mode)</div>
+    <div class="card-title">🎓 ExamFlow Branches — เตรียมสอบ</div>
     <table class="cmd-tbl">
-      <tr><th>Branch</th><th>ใช้เมื่อ</th></tr>
-      <tr><td><span class="badge badge-blue">A</span> Case</td><td>DDx วิเคราะห์เคสเต็ม</td></tr>
-      <tr><td><span class="badge badge-blue">D</span> Progress</td><td>เขียน SOAP note</td></tr>
-      <tr><td><span class="badge badge-blue">E</span> Round</td><td>เตรียม morning round</td></tr>
-      <tr><td><span class="badge badge-blue">F</span> Lab/EKG</td><td>แปลผล lab/EKG</td></tr>
-      <tr><td><span class="badge badge-blue">G</span> Admission</td><td>เขียนใบขาว</td></tr>
-      <tr><td><span class="badge badge-orange">H</span> Blind Spot</td><td>ตรวจจุดบอดใบเหลือง — ควรซักอะไรเพิ่ม</td></tr>
-      <tr><td><span class="badge badge-purple">G1–G6</span> ExamFlow</td><td>scope/pattern/summary/vignette/gap/ultra</td></tr>
+      <tr><th>Branch</th><th>ชื่อ</th><th>ทำอะไร</th><th>ตัวอย่าง</th></tr>
+      <tr>
+        <td><span class="badge badge-purple">G1</span></td>
+        <td>Scope</td>
+        <td>เก็งหัวข้อ — ความถี่ + priority + ต้องอ่านอะไร</td>
+        <td><code class="inline">[branch G1] ออกอะไรบ่อย</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G2</span></td>
+        <td>Pattern Analysis</td>
+        <td>วิเคราะห์ pattern ข้อสอบ + distractor ที่พลาดบ่อย</td>
+        <td><code class="inline">[branch G2] pattern เรื่อง Sepsis</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G3</span></td>
+        <td>Disease Summary</td>
+        <td>สรุปโรคจาก exam_kb → บันทึก Obsidian อัตโนมัติ</td>
+        <td><code class="inline">[branch G3] สรุป HIV</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G4</span></td>
+        <td>Vignette</td>
+        <td>ออกโจทย์ MCQ ตาม pattern ข้อสอบจริง</td>
+        <td><code class="inline">[branch G4] ออกโจทย์ SLE</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G5</span></td>
+        <td>Gap Detector</td>
+        <td>เทียบ vault vs exam_kb — หาโรคที่ขาด</td>
+        <td><code class="inline">[branch G5] ยังขาดอะไร</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G6</span></td>
+        <td>Ultra Summary</td>
+        <td>สรุปกระชับ อ่าน 5 นาทีก่อนสอบ</td>
+        <td><code class="inline">[branch G6] PE สอบพรุ่งนี้</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">G8</span></td>
+        <td>Lecture Bridge</td>
+        <td>อัพโหลด lecture PDF → สรุป + เทียบข้อสอบ + บันทึก Obsidian</td>
+        <td>Tab Lecture → อัพโหลด PDF</td>
+      </tr>
     </table>
-    <div style="font-size:12px;color:var(--muted)">บังคับ branch: <code class="inline">[branch G3] สรุป SLE</code> &nbsp;|&nbsp; Blind Spot: <code class="inline">หาจุดบอด [paste note]</code></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">
+      ต้อง ingest ข้อสอบก่อน: Tab Exam → อัพโหลด PDF &nbsp;|&nbsp;
+      G8 output: <code class="inline">vault/06 - Lecture Summaries/</code>
+    </div>
   </div>
 
+  <!-- VAULT BUILDER -->
   <div class="card">
-    <div class="card-title">📥 เพิ่มข้อมูล</div>
+    <div class="card-title">🗂️ Vault Builder — สร้าง Obsidian notes</div>
+    <table class="cmd-tbl">
+      <tr><th>ประเภท</th><th>ทำอะไร</th><th>คำสั่ง CLI</th></tr>
+      <tr><td>🦠 Diseases</td><td>note โรค — DDx · patho · management · OSCE</td><td><code class="inline">--topic "Sepsis" --type diseases</code></td></tr>
+      <tr><td>💊 Drugs</td><td>drug profile — MOA · dose · SE · interaction</td><td><code class="inline">--topic "Vancomycin" --type drugs</code></td></tr>
+      <tr><td>🔬 Approaches</td><td>symptom approach — DDx framework + red flags</td><td><code class="inline">--topic "Dyspnea" --type approaches</code></td></tr>
+      <tr><td>🧪 Labs</td><td>lab interpretation — pattern + pitfall</td><td><code class="inline">--topic "ABG" --type labs</code></td></tr>
+      <tr><td>🩺 Procedures</td><td>หัตถการ — indication + steps + complication</td><td><code class="inline">--topic "Paracentesis" --type procedures</code></td></tr>
+    </table>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">
+      หรือใช้ Tab Vault → เลือก topic type → กด สร้าง → Obsidian &nbsp;|&nbsp;
+      แปะรูป visual findings + scoring system อัตโนมัติ
+    </div>
+  </div>
+
+  <!-- INGEST -->
+  <div class="card">
+    <div class="card-title">📥 เพิ่มข้อมูลเข้าระบบ</div>
     <table class="cmd-tbl">
       <tr><th>ประเภท</th><th>วิธี</th></tr>
-      <tr><td>📄 ข้อสอบ PDF</td><td>Tab Exam → อัพโหลด หรือ <code class="inline">/examall</code></td></tr>
-      <tr><td>🖼️ Lecture slides</td><td><code class="inline">python ingest_lecture.py --folder inbox/lectures/HIV/</code></td></tr>
-      <tr><td>📚 ตำรา/Guideline</td><td>Tab KB → อัพโหลด</td></tr>
+      <tr><td>📄 ข้อสอบ PDF</td><td>Tab Exam → อัพโหลด หรือ <code class="inline">/examall</code> (Telegram)</td></tr>
+      <tr><td>🎓 Lecture slides</td><td>Tab Lecture → อัพโหลด PDF → G8 รัน auto</td></tr>
+      <tr><td>📚 ตำรา / Guideline</td><td>Tab KB → อัพโหลด</td></tr>
     </table>
-    <div style="font-size:12px;color:var(--muted)"><b>OneNote:</b> File → Export → PDF → วางใน inbox/lectures/</div>
   </div>
 
+  <!-- ช่องทาง -->
   <div class="card">
     <div class="card-title">📡 ช่องทางเข้าใช้งาน</div>
     <div class="access-grid">
       <div class="ac"><div class="ac-t">🌐 Web UI</div><div class="ac-d">หน้านี้<br><code class="inline">localhost:8000/static/</code></div></div>
       <div class="ac"><div class="ac-t">📱 Telegram Bot</div><div class="ac-d">พิมพ์ธรรมดา detect อัตโนมัติ<br><code class="inline">/examall /examdedup /help</code></div></div>
-      <div class="ac"><div class="ac-t">💻 Claude CLI</div><div class="ac-d"><code class="inline">! python examflow/query.py "..."</code></div></div>
+      <div class="ac"><div class="ac-t">💻 CLI (ExamFlow)</div><div class="ac-d"><code class="inline">python examflow/query.py "[branch G3] HIV"</code></div></div>
       <div class="ac"><div class="ac-t">📖 API Docs</div><div class="ac-d"><code class="inline">localhost:8000/docs</code></div></div>
     </div>
   </div>

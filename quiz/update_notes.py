@@ -29,34 +29,44 @@ SECTION_TAG = "<!-- exam-focus-auto -->"
 
 # ── Load exam_kb ──────────────────────────────────────────────────────────────
 
-def _load_kb() -> list[dict]:
+def _load_kb() -> tuple[list[dict], dict]:
     data = json.loads(KB_PATH.read_text(encoding="utf-8"))
-    return data["questions"]
+    return data["questions"], data.get("disease_index", {})
 
 
 # ── Find questions for a disease ──────────────────────────────────────────────
 
-def _search_questions(kb: list[dict], disease: str) -> list[dict]:
-    """Find exam_kb questions related to the disease by full-text search."""
-    terms = [t.strip().lower() for t in re.split(r"[\s/&]+", disease) if len(t.strip()) > 2]
+def _norm(s: str) -> str:
+    return re.sub(r"[\s_\-]+", " ", s).lower().strip()
+
+
+def _search_questions(kb: list[dict], disease_index: dict, disease: str) -> list[dict]:
+    """Find questions via disease_index (exact then fuzzy match on disease name)."""
+    q_map = {q["id"]: q for q in kb}
+    d_norm = _norm(disease)
+
+    # exact match first, then case/spacing-insensitive
+    entry = disease_index.get(disease)
+    if not entry:
+        for key in disease_index:
+            if _norm(key) == d_norm:
+                entry = disease_index[key]
+                break
+
+    if not entry:
+        return []
+
+    question_ids = entry.get("question_ids", [])
+    seen_texts: set[str] = set()
     results = []
-    seen_texts = set()
-
-    for q in kb:
-        text = " ".join([
-            str(q.get("question_text", "")),
-            str(q.get("answer_explanation", "")),
-            str(q.get("disease_tags", "")),
-            str(q.get("system_tags", "")),
-        ]).lower()
-
-        if any(t in text for t in terms):
-            # dedup by first 80 chars of question
-            key = str(q.get("question_text", ""))[:80].strip()
-            if key and key not in seen_texts:
-                seen_texts.add(key)
-                results.append(q)
-
+    for qid in question_ids:
+        q = q_map.get(qid)
+        if not q:
+            continue
+        key = str(q.get("question_text", ""))[:80].strip()
+        if key and key not in seen_texts:
+            seen_texts.add(key)
+            results.append(q)
     return results
 
 
@@ -155,7 +165,8 @@ def _find_note(disease: str) -> Path | None:
         f for f in VAULT.rglob("*.md")
         if not re.match(r"disease_.+_\d{8}", f.stem)
         and not f.stem.lower().startswith("scope")
-        and not f.stem.startswith("_MOC")
+        and not f.stem.upper().startswith("MOC")
+        and not f.stem.lower().startswith("template")
         and (d in norm(f.stem) or norm(f.stem) in d)
     ]
     if not candidates:
@@ -184,45 +195,84 @@ def _load_scope() -> list[str]:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(disease_filter: str | None, dry_run: bool, min_questions: int = 1):
-    kb       = _load_kb()
-    diseases = _load_scope()
+def _strip_exam_section(text: str) -> str:
+    """Remove existing exam-focus-auto section (and the --- separator before it)."""
+    # remove from the separator+tag onward
+    cut = re.search(r"\n\n---\n" + re.escape(SECTION_TAG), text)
+    if cut:
+        return text[:cut.start()]
+    # fallback: remove from tag onward if no separator
+    cut = re.search(re.escape(SECTION_TAG), text)
+    if cut:
+        return text[:cut.start()].rstrip()
+    return text
+
+
+def run(disease_filter: str | None, dry_run: bool, min_questions: int = 1,
+        repatch: bool = False):
+    kb, disease_index = _load_kb()
+    q_map = {q["id"]: q for q in kb}
+    diseases = list(disease_index.keys())
     updated = skipped = 0
 
+    # group diseases by resolved note_path to avoid overwriting within one run
+    from collections import defaultdict
+    note_groups: dict[Path, list[str]] = defaultdict(list)
     for disease in diseases:
         if disease_filter and disease_filter.lower() not in disease.lower():
             continue
-
         note_path = _find_note(disease)
-        if not note_path:
+        if note_path:
+            note_groups[note_path].append(disease)
+        else:
             print(f"  – {disease}: ไม่มี note")
-            continue
 
+    for note_path, matched_diseases in note_groups.items():
         existing = note_path.read_text(encoding="utf-8", errors="ignore")
 
         if SECTION_TAG in existing:
-            print(f"  ✓ {disease} — already patched, skip")
+            if not repatch:
+                print(f"  ✓ {note_path.name} — already patched, skip")
+                skipped += 1
+                continue
+            existing = _strip_exam_section(existing)
+
+        # merge question_ids from all matched diseases, dedup, preserve order
+        seen_ids: set[str] = set()
+        merged_questions: list[dict] = []
+        seen_texts: set[str] = set()
+        for disease in matched_diseases:
+            for qid in disease_index.get(disease, {}).get("question_ids", []):
+                if qid in seen_ids:
+                    continue
+                seen_ids.add(qid)
+                q = q_map.get(qid)
+                if not q:
+                    continue
+                key = str(q.get("question_text", ""))[:80].strip()
+                if key and key not in seen_texts:
+                    seen_texts.add(key)
+                    merged_questions.append(q)
+
+        if len(merged_questions) < min_questions:
+            print(f"  – {note_path.name}: พบ {len(merged_questions)} ข้อ (ต่ำกว่า threshold), skip")
             skipped += 1
             continue
 
-        questions = _search_questions(kb, disease)
-        if len(questions) < min_questions:
-            print(f"  – {disease}: พบ {len(questions)} ข้อ (ต่ำกว่า threshold), skip")
-            skipped += 1
-            continue
+        label = matched_diseases[0] if len(matched_diseases) == 1 else f"{matched_diseases[0]} +{len(matched_diseases)-1}"
+        print(f"\n  {label} — {len(merged_questions)} ข้อ → {note_path.name}")
 
-        print(f"\n  {disease} — {len(questions)} ข้อ → {note_path.name}")
-
-        section = _format_section(disease, questions)
+        section = _format_section(matched_diseases[0], merged_questions)
 
         if dry_run:
             print("  [dry-run] preview:")
             print("  " + "\n  ".join(section.splitlines()[:30]))
             print("  ...")
         else:
-            with open(note_path, "a", encoding="utf-8") as f:
-                f.write(f"\n\n---\n{section}\n")
-            print(f"  → appended {len(questions)} questions to {note_path.name}")
+            new_content = existing.rstrip() + f"\n\n---\n{section}\n"
+            note_path.write_text(new_content, encoding="utf-8")
+            action = "repatched" if repatch else "appended"
+            print(f"  → {action} {len(merged_questions)} questions to {note_path.name}")
 
         updated += 1
 
@@ -233,7 +283,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--disease",       help="Filter disease name")
     parser.add_argument("--dry-run",       action="store_true")
+    parser.add_argument("--repatch",       action="store_true",
+                        help="Replace existing exam section (use after fixing search logic)")
     parser.add_argument("--min-questions", type=int, default=1,
                         help="Minimum exam questions required to update (default 1)")
     args = parser.parse_args()
-    run(args.disease, args.dry_run, args.min_questions)
+    run(args.disease, args.dry_run, args.min_questions, args.repatch)

@@ -69,18 +69,55 @@ def _save_to_obsidian(content: str, subfolder: str, filename: str) -> bool:
         return False
 
 
+def _strip_fence(text: str) -> str:
+    """Some models occasionally wrap their entire answer in a ``` code fence
+    (e.g. ```markdown ... ```). Left in place, Obsidian renders the whole note
+    as flat monospace text — callouts, wikilinks, and color spans all break."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r'^```[a-zA-Z]*\n?', '', t, count=1)
+        t = re.sub(r'\n?```$', '', t, count=1)
+        return t.strip()
+    return text
+
+
 def _call(agent_name: str, prompt: str, system: str = "") -> str:
     from router import call_agent
-    return call_agent(agent_name, prompt=prompt, system=system)
+    return _strip_fence(call_agent(agent_name, prompt=prompt, system=system))
+
+
+def _grounding_prompt(user_query: str, draft_answer: str, source_context: str) -> str:
+    """Build the grounding_gate prompt as delimited plain text instead of a JSON
+    blob. draft_answer is markdown that often contains literal quotes (span class
+    attributes, quoted MCQ choice text like "D. ..."). json.dumps()-wrapping it
+    forces those quotes through an escape/unescape round-trip that Gemini Flash
+    sometimes fails to undo, leaking literal \\" into the saved note."""
+    return (
+        f"user_query:\n{user_query}\n\n"
+        f"draft_answer:\n{draft_answer}\n\n"
+        f"source_context:\n{source_context}"
+    )
 
 
 def _get_disease_data(kb: dict, disease_name: str) -> dict:
-    """Find disease in disease_index (fuzzy match)."""
-    name_lower = disease_name.lower()
-    for key, val in kb["disease_index"].items():
-        if name_lower in key.lower() or key.lower() in name_lower:
+    """Find disease in disease_index — exact match first, then closest-length
+    substring fallback (prevents e.g. "Portal Hypertension" silently matching
+    the unrelated, shorter "Hypertension" entry just because it iterates first)."""
+    name_lower = disease_name.strip().lower()
+    di = kb["disease_index"]
+
+    for key, val in di.items():
+        if key.lower() == name_lower:
             return {"disease_name": key, **val}
-    return {}
+
+    candidates = [
+        (key, val) for key, val in di.items()
+        if name_lower in key.lower() or key.lower() in name_lower
+    ]
+    if not candidates:
+        return {}
+    key, val = min(candidates, key=lambda kv: abs(len(kv[0]) - len(disease_name)))
+    return {"disease_name": key, **val}
 
 
 def _get_disease_questions(kb: dict, disease_name: str) -> list[dict]:
@@ -93,12 +130,16 @@ def _get_disease_questions(kb: dict, disease_name: str) -> list[dict]:
 
 
 def _get_vault_disease_files() -> list[str]:
-    """List .md files in Obsidian vault diseases/ folder."""
-    diseases_dir = os.path.join(OBSIDIAN_PATH, "diseases")
-    if not os.path.exists(diseases_dir):
-        diseases_dir = OBSIDIAN_PATH
-    pattern = os.path.join(diseases_dir, "**", "*.md")
-    files = glob.glob(pattern, recursive=True)
+    """List .md files across both places disease notes live: '02 - Diseases/'
+    (hand-curated notes) and '05 - Exam Scope/MCQ/' (G3-generated exam summaries)."""
+    dirs = [os.path.join(OBSIDIAN_PATH, "02 - Diseases"),
+            os.path.join(OBSIDIAN_PATH, "05 - Exam Scope", "MCQ")]
+    files = []
+    for d in dirs:
+        if os.path.exists(d):
+            files.extend(glob.glob(os.path.join(d, "**", "*.md"), recursive=True))
+    if not files:
+        files = glob.glob(os.path.join(OBSIDIAN_PATH, "**", "*.md"), recursive=True)
     return [os.path.basename(f) for f in files]
 
 
@@ -130,14 +171,10 @@ def run_g1_scope(user_input: str) -> str:
     grounded = _call(
         "examflow_grounding",
         system=_load_prompt("grounding_gate"),
-        prompt=json.dumps({
-            "user_query":     user_input,
-            "draft_answer":   scope_raw,
-            "source_context": json.dumps({
-                "questions":     questions,
-                "disease_index": kb["disease_index"],
-            }, ensure_ascii=False)
-        }, ensure_ascii=False)
+        prompt=_grounding_prompt(user_input, scope_raw, json.dumps({
+            "questions":     questions,
+            "disease_index": kb["disease_index"],
+        }, ensure_ascii=False))
     )
 
     saved = _save_report("scope", grounded)
@@ -174,11 +211,7 @@ def run_g2_analysis(user_input: str) -> str:
     grounded = _call(
         "examflow_grounding",
         system=_load_prompt("grounding_gate"),
-        prompt=json.dumps({
-            "user_query":    user_input,
-            "draft_answer":  merged,
-            "source_context": json.dumps(kb["pattern_analysis"], ensure_ascii=False)
-        }, ensure_ascii=False)
+        prompt=_grounding_prompt(user_input, merged, json.dumps(kb["pattern_analysis"], ensure_ascii=False))
     )
 
     saved = _save_report("analysis", grounded)
@@ -205,9 +238,12 @@ def run_g3_disease(user_input: str, compact: bool = False) -> str:
         )
 
     mode = "compact" if compact else "full"
+    sample_questions = _get_disease_questions(kb, disease_data["disease_name"])[:3]
     architect_input = json.dumps({
         "disease_name":      disease_data["disease_name"],
         "exam_data":         disease_data,
+        "sample_questions":  sample_questions,
+        "today":             datetime.now().strftime("%Y-%m-%d"),
         "mode":              mode,
         "comparison_target": None,
     }, ensure_ascii=False, indent=2)
@@ -221,11 +257,7 @@ def run_g3_disease(user_input: str, compact: bool = False) -> str:
     grounded = _call(
         "examflow_grounding",
         system=_load_prompt("grounding_gate"),
-        prompt=json.dumps({
-            "user_query":    user_input,
-            "draft_answer":  disease_draft,
-            "source_context": json.dumps(disease_data, ensure_ascii=False)
-        }, ensure_ascii=False)
+        prompt=_grounding_prompt(user_input, disease_draft, json.dumps(disease_data, ensure_ascii=False))
     )
     # Fall back to ungrounded draft if grounding gate fails
     if grounded.startswith("[ERROR"):
@@ -245,16 +277,17 @@ def run_g3_disease(user_input: str, compact: bool = False) -> str:
         formatted = grounded
 
     # Save to reports/
-    safe_name = re.sub(r'[^\w\s-]', '', disease_data["disease_name"]).strip().replace(' ', '_')
+    safe_name = _sanitize_disease_name(disease_data["disease_name"])
     report_name = f"disease_{safe_name}_{datetime.now().strftime('%Y%m%d')}.md"
     report_path = os.path.join(REPORTS_DIR, report_name)
     os.makedirs(REPORTS_DIR, exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(formatted)
 
-    # Auto-copy to Obsidian vault
-    obsidian_ok = _save_to_obsidian(formatted, "diseases", report_name)
-    obsidian_msg = f"✅ บันทึกไปที่ Obsidian vault/diseases/{report_name}" if obsidian_ok else "⚠️ ไม่สามารถบันทึกไป Obsidian ได้"
+    # Auto-copy to Obsidian vault — MCQ subfolder under Exam Scope (grouped with
+    # other exam-derived content for now; user may split it out later)
+    obsidian_ok = _save_to_obsidian(formatted, os.path.join("05 - Exam Scope", "MCQ"), report_name)
+    obsidian_msg = f"✅ บันทึกไปที่ Obsidian vault/05 - Exam Scope/MCQ/{report_name}" if obsidian_ok else "⚠️ ไม่สามารถบันทึกไป Obsidian ได้"
 
     return f"{formatted}\n\n---\n{obsidian_msg}\n*Local: `{report_path}`*"
 
@@ -300,16 +333,52 @@ def run_g4_vignette(user_input: str) -> str:
     grounded = _call(
         "examflow_grounding",
         system=_load_prompt("grounding_gate"),
-        prompt=json.dumps({
-            "user_query":    user_input,
-            "draft_answer":  vignette_draft,
-            "source_context": json.dumps(exam_samples, ensure_ascii=False)
-        }, ensure_ascii=False)
+        prompt=_grounding_prompt(user_input, vignette_draft, json.dumps(exam_samples, ensure_ascii=False))
     )
 
-    safe_name = re.sub(r'[^\w\s-]', '', disease_name or "topic").strip().replace(' ', '_')
+    safe_name = _sanitize_disease_name(disease_name or "topic")
     saved = _save_report(f"vignette_{safe_name}", grounded)
     return f"{grounded}\n\n---\n*บันทึกที่ `{saved}`*"
+
+
+def _sanitize_disease_name(name: str) -> str:
+    """Same sanitization G3 uses to build a filename from a disease name — reused
+    here so vault-coverage matching can never drift out of sync with it (e.g. an
+    apostrophe in "Graves' disease" must be stripped identically on both sides,
+    or an already-covered disease with punctuation in its name looks like a gap)."""
+    return re.sub(r'[^\w\s-]', '', name).strip().replace(' ', '_')
+
+
+def _vault_filename_tokens(filename: str) -> frozenset:
+    name = re.sub(r'\.md$', '', filename, flags=re.IGNORECASE)
+    name = _sanitize_disease_name(name)
+    name = re.sub(r'[_\-]+', ' ', name)
+    return frozenset(name.strip().casefold().split())
+
+
+def _match_vault_coverage(disease_names: list[str], vault_files: list[str]) -> dict[str, str | None]:
+    """Deterministic disease -> vault filename matcher (case/word-order-insensitive).
+    LLMs are unreliable at exact-matching a disease name against 100+ filenames in one
+    pass, so this does the matching in code and only hands the LLM a yes/no + filename."""
+    vault_norm = [(f, _vault_filename_tokens(f)) for f in vault_files]
+    coverage: dict[str, str | None] = {}
+    for d in disease_names:
+        d_tokens = _vault_filename_tokens(d + ".md")
+        if not d_tokens:
+            coverage[d] = None
+            continue
+        exact = [f for f, t in vault_norm if t == d_tokens]
+        if exact:
+            coverage[d] = exact[0]
+            continue
+        # fallback: disease name's tokens are a subset of the filename's tokens
+        # (e.g. "Meningitis" ⊆ "Tuberculous meningitis") — prefer the closest (smallest) match
+        candidates = sorted(
+            (f for f, t in vault_norm if d_tokens <= t),
+            key=lambda f: len(_vault_filename_tokens(f))
+        )
+        coverage[d] = candidates[0] if candidates else None
+    return coverage
 
 
 # ─────────────────────────────────────────────────────────
@@ -321,10 +390,17 @@ def run_g5_gap(user_input: str) -> str:
         return _kb_empty_response()
 
     vault_files = _get_vault_disease_files()
+    coverage = _match_vault_coverage(list(kb["disease_index"].keys()), vault_files)
+
+    # Attach precomputed coverage directly onto each disease entry — the LLM formats
+    # this, it does not have to fuzzy-match 500+ diseases against 170+ filenames itself.
+    disease_index_annotated = {
+        name: {**data, "vault_file": coverage[name], "vault_covered": coverage[name] is not None}
+        for name, data in kb["disease_index"].items()
+    }
 
     gap_input = json.dumps({
-        "disease_index":   kb["disease_index"],
-        "vault_files":     vault_files,
+        "disease_index":   disease_index_annotated,
         "pattern_analysis": kb["pattern_analysis"],
         "user_query":      user_input,
     }, ensure_ascii=False, indent=2)
@@ -338,11 +414,7 @@ def run_g5_gap(user_input: str) -> str:
     grounded = _call(
         "examflow_grounding",
         system=_load_prompt("grounding_gate"),
-        prompt=json.dumps({
-            "user_query":    user_input,
-            "draft_answer":  gap_raw,
-            "source_context": json.dumps(kb["disease_index"], ensure_ascii=False)
-        }, ensure_ascii=False)
+        prompt=_grounding_prompt(user_input, gap_raw, json.dumps(disease_index_annotated, ensure_ascii=False))
     )
 
     saved = _save_report("gaps", grounded)
@@ -401,7 +473,7 @@ def _scope_one_disease(kb: dict, disease_name: str, disease_data: dict) -> tuple
         prompt=payload,
     )
 
-    safe_name = re.sub(r'[^\w\s-]', '', disease_name).strip().replace(' ', '_')
+    safe_name = _sanitize_disease_name(disease_name)
     filename = f"scope_{safe_name}.md"
     ok = _save_to_obsidian(note, "05 - Exam Scope", filename)
     return disease_name, filename, ok

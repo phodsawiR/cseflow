@@ -229,7 +229,54 @@ def _validate_question(q: dict, schema: dict) -> bool:
 
 # ── Index builder ──────────────────────────────────────────────────────────────
 
+def _fold_key(name: str) -> str:
+    """Case- and word-order-insensitive grouping key, e.g. 'Type 2 Diabetes Mellitus'
+    and 'diabetes mellitus type 2' fold to the same key so they merge into one entry."""
+    return " ".join(sorted(name.strip().casefold().split()))
+
+
+def _canonical_name_map(counts: dict[str, int]) -> dict[str, str]:
+    """Group raw extracted names (disease or system) that only differ by case/word
+    order, and pick the most frequent exact spelling per group as the display name
+    (ties broken alphabetically) so downstream tools see one entry per real-world topic."""
+    groups: dict[str, list[str]] = {}
+    for name in counts:
+        groups.setdefault(_fold_key(name), []).append(name)
+    canon_map: dict[str, str] = {}
+    for variants in groups.values():
+        canonical = max(variants, key=lambda v: (counts[v], v))
+        for v in variants:
+            canon_map[v] = canonical
+    return canon_map
+
+
 def _build_indexes(kb: dict) -> None:
+    # ── Pre-pass: canonicalize disease/system names so "Wilson disease" and
+    # "Wilson Disease" (or "Type 2 diabetes mellitus" / "Diabetes Mellitus Type 2")
+    # collapse into a single disease_index entry instead of silently fragmenting
+    # frequency counts across near-duplicate keys ──────────────────────────────
+    disease_counts: dict = {}
+    system_counts: dict = {}
+    for q in kb["questions"]:
+        for d in q.get("diseases", []):
+            disease_counts[d] = disease_counts.get(d, 0) + 1
+        for s in q.get("systems", []):
+            system_counts[s] = system_counts.get(s, 0) + 1
+    for n in kb.get("notes", []):
+        for d in n.get("diseases", []):
+            disease_counts[d] = disease_counts.get(d, 0) + 1
+        for s in n.get("systems", []):
+            system_counts[s] = system_counts.get(s, 0) + 1
+
+    disease_canon = _canonical_name_map(disease_counts)
+    system_canon  = _canonical_name_map(system_counts)
+
+    def _cd(name: str) -> str:
+        return disease_canon.get(name, name.strip())
+
+    def _cs(name: str) -> str:
+        return system_canon.get(name, name.strip())
+
     disease_idx: dict = {}
     system_idx: dict  = {}
     topic_counts: dict = {}
@@ -249,6 +296,7 @@ def _build_indexes(kb: dict) -> None:
     # ── Index questions ──────────────────────────────────────────────────────
     for q in kb["questions"]:
         for disease in q.get("diseases", []):
+            disease = _cd(disease)
             _ensure_disease(disease)
             entry = disease_idx[disease]
             entry["question_ids"].append(q["id"])
@@ -267,9 +315,11 @@ def _build_indexes(kb: dict) -> None:
                     entry["common_distractors"].append(wrong)
 
         for system in q.get("systems", []):
+            system = _cs(system)
             _ensure_system(system)
             system_idx[system]["question_ids"].append(q["id"])
             for d in q.get("diseases", []):
+                d = _cd(d)
                 if d not in system_idx[system]["diseases"]:
                     system_idx[system]["diseases"].append(d)
 
@@ -279,6 +329,7 @@ def _build_indexes(kb: dict) -> None:
     # ── Index notes (boost must_know_facts + note_ids) ────────────────────────
     for n in kb.get("notes", []):
         for disease in n.get("diseases", []):
+            disease = _cd(disease)
             _ensure_disease(disease)
             entry = disease_idx[disease]
             if n["id"] not in entry["note_ids"]:
@@ -288,10 +339,12 @@ def _build_indexes(kb: dict) -> None:
                     entry["must_know_facts"].append(pt)
 
         for system in n.get("systems", []):
+            system = _cs(system)
             _ensure_system(system)
             if n["id"] not in system_idx[system]["note_ids"]:
                 system_idx[system]["note_ids"].append(n["id"])
             for d in n.get("diseases", []):
+                d = _cd(d)
                 if d not in system_idx[system]["diseases"]:
                     system_idx[system]["diseases"].append(d)
 
