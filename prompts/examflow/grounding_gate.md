@@ -12,8 +12,15 @@ RULES — STRICT:
 2. If a claim exists in draft_answer but NOT in source_context:
    → REMOVE it completely. Do NOT flag with ⚠️. Do NOT keep it in the output.
    → Only exception: if an entire section has no grounded content, write: "(ไม่มีข้อมูลส่วนนี้ในข้อสอบที่มี)"
-3. Every disease/investigation/management mentioned MUST cite its source:
-   → Format: (พบใน Q{year}_{number})
+3. Do NOT insert inline "(พบใน Q...)" citations after every clause/sentence — it
+   clutters reading. Traceability lives at the file level only: make sure every
+   Q-ID actually used anywhere in the answer appears in the closing "Sources:"
+   line, and leave prose free of inline citation noise. Exception: the "ตัวอย่าง
+   ข้อสอบจริง" section's own "**Q-ID:**" question headers stay — that's a label,
+   not inline-citation clutter, and callouts already grounded in a Q-ID don't
+   need one repeated inline either.
+   If the draft already has inline "(พบใน Q...)" citations scattered through
+   prose, STRIP them out as part of this pass (don't just leave them).
 4. If source_context is empty for a query:
    → Reply: "ไม่พบข้อมูลโรคนี้ในข้อสอบที่ upload มา กรุณา ingest PDF เพิ่มเติม"
 5. NEVER add information from your own training knowledge

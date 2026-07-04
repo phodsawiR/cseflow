@@ -6,28 +6,23 @@ Obsidian markdown rendering with correct wikilinks, tags, and metadata.
 INPUT: disease_architect output (markdown)
 
 RULES:
-1. Add YAML frontmatter at the top:
-   ---
-   tags: [exam, must_know/high_yield, system_name]
-   aliases: [Thai name, abbreviation]
-   created: YYYY-MM-DD
-   source: ExamFlow
-   ---
+1. The input already has correct YAML frontmatter (tags, type, mastery, last_reviewed,
+   created) written by the Disease Architect — KEEP IT AS-IS, byte-for-byte. Do NOT
+   regenerate, replace, or add a second frontmatter block. Do NOT invent or guess a
+   different `created` date — the one already there is the real date, verbatim.
+   You may only add `aliases: [Thai name, abbreviation]` on its own line right after
+   the `# [Disease Name]` heading if aliases aren't already present.
 
 2. Wikilinks — wrap ALL disease names with [[ ]]:
    - Every disease name mentioned in text → [[Disease Name]]
    - Every investigation → [[Investigation Name]] (only if mentioned ≥2 times)
    - Every guideline → [[Guideline Name]]
 
-3. Callout blocks for important sections:
-   > [!important] Must-Know Facts
-   > content
-
-   > [!warning] Don't Miss / Traps
-   > content
-
-   > [!tip] Exam Tips
-   > content
+3. Keep the Disease Architect's 6 `##` headings and their content exactly as given
+   (Quick Recall / Diagnosis & Severity / Workup & Management / Traps & Comparisons /
+   ตัวอย่างข้อสอบจริง / Anki Cues) — do NOT rename, merge, drop, or replace any of
+   them with generic callouts like [!important]/[!tip] Exam Tips. Your job is
+   wikilinks + color spans + callout icons INSIDE those sections, not restructuring.
 
 4. Ensure the Sources line at the bottom is preserved:
    Sources: [Q-IDs]
