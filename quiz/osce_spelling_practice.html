@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OSCE Spelling Drill</title>
+<style>
+  :root {
+    --bg: #EEF1F0;
+    --surface: #FFFFFF;
+    --ink: #16221F;
+    --ink-muted: #5B6D68;
+    --accent: #0E7C7B;
+    --good: #1E8E5A;
+    --bad: #C63C3C;
+    --line: #D8DED9;
+    --font-display: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, 'Roboto Mono', monospace;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Leelawadee UI', 'Noto Sans Thai', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0B1413;
+      --surface: #101B19;
+      --ink: #E6EEEC;
+      --ink-muted: #93A6A1;
+      --accent: #4FD1C9;
+      --good: #4ADE80;
+      --bad: #F87171;
+      --line: #1E2C29;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B1413;
+    --surface: #101B19;
+    --ink: #E6EEEC;
+    --ink-muted: #93A6A1;
+    --accent: #4FD1C9;
+    --good: #4ADE80;
+    --bad: #F87171;
+    --line: #1E2C29;
+  }
+  :root[data-theme="light"] {
+    --bg: #EEF1F0;
+    --surface: #FFFFFF;
+    --ink: #16221F;
+    --ink-muted: #5B6D68;
+    --accent: #0E7C7B;
+    --good: #1E8E5A;
+    --bad: #C63C3C;
+    --line: #D8DED9;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    overflow-x: hidden;
+    min-height: 100%;
+  }
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 20px 14px 48px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  .app {
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* header */
+  .headerbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .headerbar h1 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .headerbar .subtitle {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+  .stats {
+    display: flex;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    flex-shrink: 0;
+  }
+  .stats .stat b {
+    display: block;
+    color: var(--ink);
+    font-size: 0.95rem;
+  }
+  .stats .stat {
+    text-align: right;
+    line-height: 1.25;
+  }
+  .stats .stat span {
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* quiz card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    border-top: 4px solid var(--accent);
+    padding: 22px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition: border-top-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .card.correct { border-top-color: var(--good); box-shadow: 0 0 0 1px var(--good) inset; }
+  .card.incorrect { border-top-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--ink-muted);
+    background: transparent;
+  }
+  .chip.cat-disease { color: #B0473F; border-color: #B0473F55; }
+  .chip.cat-investigation { color: #2E6FA3; border-color: #2E6FA355; }
+  .chip.cat-management { color: #8A6D1F; border-color: #8A6D1F55; }
+  @media (prefers-color-scheme: dark) {
+    .chip.cat-disease { color: #E38A83; }
+    .chip.cat-investigation { color: #7FB3E0; }
+    .chip.cat-management { color: #D9BC6C; }
+  }
+  :root[data-theme="dark"] .chip.cat-disease { color: #E38A83; }
+  :root[data-theme="dark"] .chip.cat-investigation { color: #7FB3E0; }
+  :root[data-theme="dark"] .chip.cat-management { color: #D9BC6C; }
+
+  .attempt-no {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .reading-label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin: 0 0 2px;
+  }
+  .reading {
+    font-family: var(--font-body);
+    font-size: 1.9rem;
+    font-weight: 600;
+    line-height: 1.3;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .answer-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .answer-row label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  input[type="text"] {
+    font-family: var(--font-body);
+    font-size: 1.15rem;
+    padding: 12px 12px;
+    border: none;
+    border-bottom: 2px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 2px;
+    width: 100%;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+  }
+  input[type="text"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  input[type="text"]:disabled {
+    color: var(--ink-muted);
+  }
+
+  .feedback {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    display: none;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .feedback.show { display: flex; }
+  .feedback .tag {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+  }
+  .feedback.is-correct .tag { color: var(--good); }
+  .feedback.is-incorrect .tag { color: var(--bad); }
+  .feedback .answer-text {
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button {
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 11px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    flex: 1 1 auto;
+    min-height: 44px;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #06201F;
+  }
+  button.ghost {
+    color: var(--ink-muted);
+    flex: 0 0 auto;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  /* filters */
+  .filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-chip {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .filter-chip:hover { border-color: var(--accent); }
+  .filter-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .filter-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+  .filter-chip .n {
+    opacity: 0.7;
+  }
+
+  footer.foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--ink-muted);
+    padding: 2px 4px;
+  }
+  footer.foot button.reset-link {
+    background: none;
+    border: none;
+    color: var(--ink-muted);
+    text-decoration: underline;
+    padding: 4px 2px;
+    min-height: auto;
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+  }
+
+  .empty-state {
+    font-family: var(--font-body);
+    color: var(--ink-muted);
+    text-align: center;
+    padding: 20px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="headerbar">
+    <div>
+      <h1>OSCE Spelling Drill</h1>
+      <span class="subtitle">คำอ่าน → English spelling</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>Score</span><b id="statScore">0</b></div>
+      <div class="stat"><span>Streak</span><b id="statStreak">0</b></div>
+      <div class="stat"><span>Acc</span><b id="statAcc">—</b></div>
+    </div>
+  </div>
+
+  <div class="card" id="card">
+    <div class="card-top">
+      <span class="chip" id="catChip">—</span>
+      <span class="attempt-no" id="termProgress"></span>
+    </div>
+
+    <div>
+      <p class="reading-label">อ่านว่า</p>
+      <p class="reading" id="readingText">กำลังโหลด…</p>
+    </div>
+
+    <div class="answer-row">
+      <label for="answerInput">พิมพ์คำสะกดภาษาอังกฤษ</label>
+      <input type="text" id="answerInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="type the English spelling…" />
+    </div>
+
+    <div class="feedback" id="feedback">
+      <span class="tag" id="feedbackTag"></span>
+      <span class="answer-text" id="feedbackAnswer"></span>
+    </div>
+
+    <div class="controls">
+      <button class="primary" id="btnCheck">Check</button>
+      <button id="btnReveal">Reveal</button>
+      <button id="btnNext" disabled>Next →</button>
+    </div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+
+  <footer class="foot">
+    <span id="poolInfo"></span>
+    <button class="reset-link" id="btnReset">reset progress</button>
+  </footer>
+</div>
+
+<script>
+const VOCAB = [
+  { term: "Acute Ischemic Stroke", category: "disease", thai: "อะคิวต์ อิสคีมิก สโตรก" },
+  { term: "Alcoholic Liver Disease", category: "disease", thai: "แอลกอฮอลิก ลิเวอร์ ดิซีส" },
+  { term: "Anuria", category: "disease", thai: "อะนูเรีย" },
+  { term: "Ascites", category: "disease", thai: "แอสไซทีส" },
+  { term: "Atopic dermatitis", category: "disease", thai: "อะโทปิก เดอร์มาไทติส" },
+  { term: "Bartter syndrome", category: "disease", thai: "บาร์ตเตอร์ ซินโดรม" },
+  { term: "Bowel Perforation", category: "disease", thai: "บาวเวล เพอร์โฟเรชั่น" },
+  { term: "Carpal Tunnel Syndrome", category: "disease", thai: "คาร์พัล ทันเนล ซินโดรม" },
+  { term: "Cirrhosis", category: "disease", thai: "เซอร์โรซิส" },
+  { term: "Condyloma acuminata (penile)", category: "disease", thai: "คอนดิโลมา อะคูมินาตา (เพนายล์)" },
+  { term: "Cushing's syndrome", category: "disease", thai: "คุชชิงส์ ซินโดรม" },
+  { term: "Dermatophyte infection", category: "disease", thai: "เดอร์มาโทไฟต์ อินเฟกชั่น" },
+  { term: "Dermatophytosis (Tinea)", category: "disease", thai: "เดอร์มาโทไฟโทซิส (ทีเนีย)" },
+  { term: "Diabetes Mellitus", category: "disease", thai: "ไดอะบีทิส เมลลิตัส" },
+  { term: "Diabetic Foot", category: "disease", thai: "ไดอะเบติก ฟุต" },
+  { term: "Diabetic Ketoacidosis", category: "disease", thai: "ไดอะเบติก คีโตอะซิโดซิส" },
+  { term: "Diffuse goiter", category: "disease", thai: "ดิฟฟิวส์ กอยเตอร์" },
+  { term: "Fetal Distress", category: "disease", thai: "ฟีทัล ดิสเทรส" },
+  { term: "Gitelman syndrome", category: "disease", thai: "กิเทลแมน ซินโดรม" },
+  { term: "Graves' disease", category: "disease", thai: "เกรฟส์ ดิซีส" },
+  { term: "HIV infection", category: "disease", thai: "เอชไอวี อินเฟกชั่น" },
+  { term: "Hemorrhagic Stroke", category: "disease", thai: "เฮมเมอร์เรจิก สโตรก" },
+  { term: "Herpes zoster", category: "disease", thai: "เฮอร์พีส โซสเตอร์" },
+  { term: "Herpes zoster (leg)", category: "disease", thai: "เฮอร์พีส โซสเตอร์ (เลก)" },
+  { term: "Hollow Viscus Perforation", category: "disease", thai: "ฮอลโลว์ วิสคัส เพอร์โฟเรชั่น" },
+  { term: "Human Immunodeficiency Virus", category: "disease", thai: "ฮิวแมน อิมมูโนดีฟิเชียนซี ไวรัส" },
+  { term: "Hyperaldosteronism", category: "disease", thai: "ไฮเปอร์อัลโดสเตอโรนิซึม" },
+  { term: "Hypercalcemia", category: "disease", thai: "ไฮเปอร์แคลซีเมีย" },
+  { term: "Hypocalcemia", category: "disease", thai: "ไฮโปแคลซีเมีย" },
+  { term: "Hypokalemia", category: "disease", thai: "ไฮโปคาลีเมีย" },
+  { term: "Hypomagnesemia", category: "disease", thai: "ไฮโปแมกนีซีเมีย" },
+  { term: "Hypothyroidism", category: "disease", thai: "ไฮโปไทรอยด์ดิซึม" },
+  { term: "Ileus", category: "disease", thai: "ไอเลียส" },
+  { term: "Immune Thrombocytopenic Purpura (ITP)", category: "disease", thai: "อิมมูน ทรอมโบไซโทพีนิก เพอร์พิวรา (ไอทีพี)" },
+  { term: "Increased Intracranial Pressure", category: "disease", thai: "อินครีสด์ อินทราคราเนียล เพรสเชอร์" },
+  { term: "Influenza", category: "disease", thai: "อินฟลูเอนซา" },
+  { term: "Intracranial Mass", category: "disease", thai: "อินทราคราเนียล แมส" },
+  { term: "Ischemic Stroke", category: "disease", thai: "อิสคีมิก สโตรก" },
+  { term: "Kaposi sarcoma", category: "disease", thai: "คาโปซี ซาร์โคมา" },
+  { term: "Large Bowel Obstruction", category: "disease", thai: "ลาร์จ บาวเวล ออบสตรักชั่น" },
+  { term: "Lung Abscess", category: "disease", thai: "ลัง แอบเซส" },
+  { term: "Massive Pleural Effusion", category: "disease", thai: "แมสซีฟ พลูรัล เอฟฟิวชั่น" },
+  { term: "Measles", category: "disease", thai: "มีเซิลส์" },
+  { term: "Molluscum contagiosum", category: "disease", thai: "มอลลัสคัม คอนทาจิโอซัม" },
+  { term: "Multinodular goiter", category: "disease", thai: "มัลติโนดิวลาร์ กอยเตอร์" },
+  { term: "Oligohydramnios", category: "disease", thai: "โอลิโกไฮดรามนิออส" },
+  { term: "Pityriasis rosea", category: "disease", thai: "พิทิริเอซิส โรเซีย" },
+  { term: "Psoriasis vulgaris", category: "disease", thai: "โซไรอาซิส วัลการิส" },
+  { term: "Psoriatic nail", category: "disease", thai: "โซไรแอติก เนล" },
+  { term: "Renal Tubular Acidosis", category: "disease", thai: "รีนัล ทิวบิวลาร์ อะซิโดซิส" },
+  { term: "Seizure with Todd's Paralysis", category: "disease", thai: "ซีเชอร์ วิท ทอดด์ส พาราไลซิส" },
+  { term: "Septic Shock", category: "disease", thai: "เซพติก ช็อก" },
+  { term: "Small Bowel Obstruction", category: "disease", thai: "สมอลล์ บาวเวล ออบสตรักชั่น" },
+  { term: "Stroke", category: "disease", thai: "สโตรก" },
+  { term: "Thyrotoxicosis", category: "disease", thai: "ไทโรทอกซิโคซิส" },
+  { term: "Toxic adenoma", category: "disease", thai: "ทอกซิก อะดีโนมา" },
+  { term: "Toxic multinodular goiter", category: "disease", thai: "ทอกซิก มัลติโนดิวลาร์ กอยเตอร์" },
+  { term: "Unilocular goiter", category: "disease", thai: "ยูนิโลคิวลาร์ กอยเตอร์" },
+  { term: "Valvular Heart Disease", category: "disease", thai: "วาล์วิวลาร์ ฮาร์ต ดิซีส" },
+  { term: "Vertebral infection", category: "disease", thai: "เวอร์ทีบรัล อินเฟกชั่น" },
+  { term: "Visual pathway lesion", category: "disease", thai: "วิชวล พาธเวย์ ลีชั่น" },
+  { term: "Vitamin D intoxication", category: "disease", thai: "ไวตามิน ดี อินทอกซิเคชั่น" },
+  { term: "Allen's test", category: "investigation", thai: "อัลเลนส์ เทสต์" },
+  { term: "Anti-HIV test", category: "investigation", thai: "แอนติ-เอชไอวี เทสต์" },
+  { term: "Biophysical Profile (BPP)", category: "investigation", thai: "ไบโอฟิสิคัล โปรไฟล์ (บีพีพี)" },
+  { term: "Blood chemistry", category: "investigation", thai: "บลัด เคมิสตรี" },
+  { term: "CT Brain", category: "investigation", thai: "ซีที เบรน" },
+  { term: "Chest X-ray (CXR)", category: "investigation", thai: "เชสต์ เอกซเรย์ (ซีเอกซ์อาร์)" },
+  { term: "Crystal microscopy", category: "investigation", thai: "คริสตัล ไมโครสโคปี" },
+  { term: "Deepest Vertical Pocket (DVP)", category: "investigation", thai: "ดีพเพสต์ เวอร์ทิคัล พ็อกเก็ต (ดีวีพี)" },
+  { term: "EKG", category: "investigation", thai: "อีเคจี" },
+  { term: "FT3", category: "investigation", thai: "เอฟทีทรี" },
+  { term: "Gram stain", category: "investigation", thai: "แกรม สเตน" },
+  { term: "Hemoculture", category: "investigation", thai: "ฮีโมคัลเจอร์" },
+  { term: "Inclusion body", category: "investigation", thai: "อินคลูชั่น บอดี" },
+  { term: "Ophthalmoscope", category: "investigation", thai: "ออฟทาลโมสโคป" },
+  { term: "Phalen's test", category: "investigation", thai: "เฟเลนส์ เทสต์" },
+  { term: "Psoriatic arthritis", category: "investigation", thai: "โซไรแอติก อาร์ไทรทิส" },
+  { term: "Serum osmolality", category: "investigation", thai: "ซีรัม ออสโมลาลิตี" },
+  { term: "Serum potassium", category: "investigation", thai: "ซีรัม โพแทสเซียม" },
+  { term: "TSH", category: "investigation", thai: "ทีเอสเอช" },
+  { term: "Thyroid function tests", category: "investigation", thai: "ไทรอยด์ ฟังก์ชั่น เทสต์ส" },
+  { term: "Thyroid uptake", category: "investigation", thai: "ไทรอยด์ อัพเทก" },
+  { term: "Tinel's test", category: "investigation", thai: "ทิเนลส์ เทสต์" },
+  { term: "Transtubular Potassium Gradient (TTKG)", category: "investigation", thai: "ทรานส์ทิวบิวลาร์ โพแทสเซียม เกรเดียนต์ (ทีทีเคจี)" },
+  { term: "Ultrasound", category: "investigation", thai: "อัลตราซาวด์" },
+  { term: "Urine anion gap", category: "investigation", thai: "ยูรีน แอนไอออน แกป" },
+  { term: "Urine chemistry", category: "investigation", thai: "ยูรีน เคมิสตรี" },
+  { term: "Urine osmolality", category: "investigation", thai: "ยูรีน ออสโมลาลิตี" },
+  { term: "Urine potassium", category: "investigation", thai: "ยูรีน โพแทสเซียม" },
+  { term: "Vibration sensation testing", category: "investigation", thai: "ไวเบรชั่น เซนเซชั่น เทสติ้ง" },
+  { term: "blood culture", category: "investigation", thai: "บลัด คัลเจอร์" },
+  { term: "5% Permethrin cream", category: "management", thai: "ไฟว์เปอร์เซ็นต์ เพอร์เมทริน ครีม" },
+  { term: "Diuretics", category: "management", thai: "ไดยูเรติกส์" },
+  { term: "Foley's catheterization", category: "management", thai: "โฟลีย์ส แคทีเทอไรเซชั่น" },
+  { term: "Glipizide", category: "management", thai: "กลิพิไซด์" },
+  { term: "Indwelling Foley catheter insertion", category: "management", thai: "อินด์เวลลิ่ง โฟลีย์ แคทีเทอร์ อินเซอร์ชั่น" },
+  { term: "Metformin", category: "management", thai: "เมทฟอร์มิน" },
+  { term: "Nasogastric tube (NG tube)", category: "management", thai: "นาโซแกสตริก ทิวบ์ (เอ็นจี ทิวบ์)" },
+  { term: "Oral antihistamines", category: "management", thai: "ออรัล แอนติฮิสตามีนส์" },
+  { term: "Termination of pregnancy", category: "management", thai: "เทอร์มิเนชั่น ออฟ เพรกแนนซี" },
+  { term: "Topical ketoconazole", category: "management", thai: "โทพิคัล คีโตโคนาโซล" },
+  { term: "Topical terbinafine", category: "management", thai: "โทพิคัล เทอร์บินาฟีน" },
+];
+</script>
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "osce_spelling_progress_v2";
+  var stats = loadStats();
+  var activeCategory = "all";
+  var queue = [];
+  var current = null;
+  var lastTerm = null;
+  var revealed = false;
+  var answered = false;
+  var session = { correct: 0, attempts: 0, streak: 0 };
+
+  var CATS = [
+    { key: "all", label: "All" },
+    { key: "disease", label: "Disease" },
+    { key: "investigation", label: "Investigation" },
+    { key: "management", label: "Management" }
+  ];
+
+  var els = {
+    card: document.getElementById("card"),
+    catChip: document.getElementById("catChip"),
+    termProgress: document.getElementById("termProgress"),
+    reading: document.getElementById("readingText"),
+    input: document.getElementById("answerInput"),
+    feedback: document.getElementById("feedback"),
+    feedbackTag: document.getElementById("feedbackTag"),
+    feedbackAnswer: document.getElementById("feedbackAnswer"),
+    btnCheck: document.getElementById("btnCheck"),
+    btnReveal: document.getElementById("btnReveal"),
+    btnNext: document.getElementById("btnNext"),
+    filters: document.getElementById("filters"),
+    poolInfo: document.getElementById("poolInfo"),
+    btnReset: document.getElementById("btnReset"),
+    statScore: document.getElementById("statScore"),
+    statStreak: document.getElementById("statStreak"),
+    statAcc: document.getElementById("statAcc")
+  };
+
+  function loadStats() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveStats() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); } catch (e) {}
+  }
+  function getTermStats(term) {
+    if (!stats[term]) stats[term] = { attempts: 0, correct: 0, wrong: 0 };
+    return stats[term];
+  }
+
+  function normalize(s) {
+    return s
+      .trim()
+      .toLowerCase()
+      .replace(/[‘’`´]/g, "'")
+      .replace(/[–—]/g, "-")
+      .replace(/\s+/g, " ");
+  }
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+
+  function poolFor(cat) {
+    return VOCAB.filter(function (v) { return cat === "all" || v.category === cat; });
+  }
+
+  function buildQueue() {
+    var pool = poolFor(activeCategory);
+    var weighted = [];
+    pool.forEach(function (v) {
+      var s = stats[v.term];
+      var weight = 1;
+      if (s && s.attempts > 0) {
+        var wrongRate = s.wrong / s.attempts;
+        weight = 1 + wrongRate * 3;
+      }
+      var copies = Math.max(1, Math.round(weight));
+      for (var i = 0; i < copies; i++) weighted.push(v);
+    });
+    shuffle(weighted);
+    queue = weighted;
+  }
+
+  function renderFilters() {
+    els.filters.innerHTML = "";
+    CATS.forEach(function (c) {
+      var count = poolFor(c.key).length;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-chip" + (activeCategory === c.key ? " active" : "");
+      btn.innerHTML = c.label + ' <span class="n">' + count + "</span>";
+      btn.addEventListener("click", function () {
+        if (activeCategory === c.key) return;
+        activeCategory = c.key;
+        queue = [];
+        lastTerm = null;
+        renderFilters();
+        nextWord();
+      });
+      els.filters.appendChild(btn);
+    });
+  }
+
+  function updateStatsReadout() {
+    els.statScore.textContent = session.correct;
+    els.statStreak.textContent = session.streak;
+    els.statAcc.textContent = session.attempts > 0
+      ? Math.round((session.correct / session.attempts) * 100) + "%"
+      : "—";
+  }
+
+  function catLabel(key) {
+    var m = { disease: "Disease", investigation: "Investigation", management: "Management" };
+    return m[key] || key;
+  }
+
+  function nextWord() {
+    if (queue.length === 0) buildQueue();
+    if (queue.length === 0) {
+      current = null;
+      els.reading.textContent = "ไม่มีคำในหมวดนี้";
+      els.catChip.textContent = "—";
+      els.input.disabled = true;
+      els.btnCheck.disabled = true;
+      els.btnReveal.disabled = true;
+      return;
+    }
+    var idx = 0;
+    if (queue.length > 1 && lastTerm) {
+      var found = -1;
+      for (var i = 0; i < queue.length; i++) {
+        if (queue[i].term !== lastTerm) { found = i; break; }
+      }
+      if (found !== -1) idx = found;
+    }
+    current = queue.splice(idx, 1)[0];
+    lastTerm = current.term;
+    revealed = false;
+    answered = false;
+
+    els.card.classList.remove("correct", "incorrect");
+    els.catChip.className = "chip cat-" + current.category;
+    els.catChip.textContent = catLabel(current.category);
+    els.reading.textContent = current.thai;
+    els.termProgress.textContent = "pool: " + (queue.length + 1) + " left";
+    els.input.value = "";
+    els.input.disabled = false;
+    els.feedback.classList.remove("show", "is-correct", "is-incorrect");
+    els.btnCheck.disabled = false;
+    els.btnReveal.disabled = false;
+    els.btnNext.disabled = true;
+    els.input.focus();
+    updatePoolInfo();
+  }
+
+  function updatePoolInfo() {
+    var total = poolFor(activeCategory).length;
+    els.poolInfo.textContent = total + " terms in view · queue " + queue.length;
+  }
+
+  function submitAnswer() {
+    if (!current || answered) return;
+    var raw = els.input.value;
+    if (!raw.trim()) { els.input.focus(); return; }
+    var isCorrect = normalize(raw) === normalize(current.term);
+    finishAttempt(isCorrect, false);
+  }
+
+  function revealAnswer() {
+    if (!current || answered) return;
+    finishAttempt(false, true);
+  }
+
+  function finishAttempt(isCorrect, wasReveal) {
+    answered = true;
+    var s = getTermStats(current.term);
+    s.attempts++;
+    if (isCorrect) { s.correct++; } else { s.wrong++; }
+    saveStats();
+
+    session.attempts++;
+    if (isCorrect) {
+      session.correct++;
+      session.streak++;
+    } else {
+      session.streak = 0;
+    }
+    updateStatsReadout();
+
+    els.card.classList.toggle("correct", isCorrect);
+    els.card.classList.toggle("incorrect", !isCorrect);
+    els.feedback.classList.add("show");
+    els.feedback.classList.toggle("is-correct", isCorrect);
+    els.feedback.classList.toggle("is-incorrect", !isCorrect);
+    els.feedbackTag.textContent = isCorrect ? "Correct" : (wasReveal ? "Revealed" : "Incorrect");
+    els.feedbackAnswer.textContent = current.term;
+
+    els.input.disabled = true;
+    els.btnCheck.disabled = true;
+    els.btnReveal.disabled = true;
+    els.btnNext.disabled = false;
+    els.btnNext.focus();
+  }
+
+  els.btnCheck.addEventListener("click", submitAnswer);
+  els.btnReveal.addEventListener("click", revealAnswer);
+  els.btnNext.addEventListener("click", nextWord);
+
+  els.input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!answered) submitAnswer();
+      else nextWord();
+    }
+  });
+
+  els.btnReset.addEventListener("click", function () {
+    if (!confirm("ล้างสถิติความจำทั้งหมด และเริ่มนับคะแนนใหม่?")) return;
+    stats = {};
+    saveStats();
+    session = { correct: 0, attempts: 0, streak: 0 };
+    updateStatsReadout();
+    queue = [];
+    lastTerm = null;
+    nextWord();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (answered && e.key === "Enter") nextWord();
+  });
+
+  renderFilters();
+  updateStatsReadout();
+  nextWord();
+})();
+</script>
+
+</body>
+</html>
