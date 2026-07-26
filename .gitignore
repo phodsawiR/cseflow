@@ -16,7 +16,10 @@ ward_topics.json
 clinical_kg.csv
 kg.csv
 examflow/exam_kb.json
+examflow/backups/
 quiz/quiz_log.json
+# Generated MCQ practice bank — rebuild with `python build_quiz_bank.py`
+quiz/data/
 
 # User session data
 sessions/

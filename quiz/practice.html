@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCQ Practice — CaseFlow</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --text: #1a1d21;
+    --muted: #63707e;
+    --line: #d8dee6;
+    --accent: #2f6fd0;
+    --accent-soft: #e4edfb;
+    --ok: #1a7f4b;
+    --ok-soft: #e2f4ea;
+    --bad: #c0392b;
+    --bad-soft: #fbe6e3;
+    --warn: #a8620a;
+    --warn-soft: #fdf0dd;
+    --star: #d98c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b;
+      --panel: #1c2126;
+      --panel-2: #242a31;
+      --text: #e6e9ed;
+      --muted: #97a3b0;
+      --line: #333c46;
+      --accent: #6ba4f8;
+      --accent-soft: #1e2c44;
+      --ok: #5cc98d;
+      --ok-soft: #17301f;
+      --bad: #f0796b;
+      --bad-soft: #33191b;
+      --warn: #e2a94a;
+      --warn-soft: #332616;
+      --star: #f0b429;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Sarabun", "Segoe UI", "Noto Sans Thai", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.65;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 16px 16px 80px; }
+  h1 { font-size: 1.25rem; margin: 0; }
+  .topbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 12px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px;
+  }
+  .topbar .grow { flex: 1; }
+  .sub { color: var(--muted); font-size: .82rem; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); padding: 7px 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .45; cursor: default; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label.chk { display: flex; gap: 7px; align-items: center; cursor: pointer; font-size: .9rem; }
+  .fieldlabel { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 14px 0 7px; font-weight: 600; }
+  .fieldlabel:first-child { margin-top: 0; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+  .chip {
+    font-size: .84rem; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); cursor: pointer;
+    user-select: none;
+  }
+  .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .chip .n { opacity: .6; font-size: .78em; margin-left: 4px; }
+
+  /* --- question --- */
+  .qmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    font-size: .78rem; color: var(--muted); margin-bottom: 12px; }
+  .badge { padding: 2px 8px; border-radius: 6px; background: var(--panel-2);
+    border: 1px solid var(--line); white-space: nowrap; }
+  .badge.hy { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); font-weight: 600; }
+  .badge.tw { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .badge.st { background: var(--panel-2); border-color: var(--star); color: var(--star); font-weight: 600; }
+  .qtext { font-size: 1.02rem; margin-bottom: 16px; white-space: pre-wrap; }
+  .choices { display: flex; flex-direction: column; gap: 8px; }
+  .choice {
+    display: flex; gap: 11px; align-items: flex-start; text-align: left;
+    padding: 11px 13px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel-2); width: 100%;
+  }
+  .choice .let { font-weight: 700; min-width: 1.4em; }
+  .choice .orig { font-size: .72em; color: var(--muted); margin-left: 4px; }
+  .choice.correct { background: var(--ok-soft); border-color: var(--ok); }
+  .choice.wrong { background: var(--bad-soft); border-color: var(--bad); }
+  .choice.dim { opacity: .55; }
+  .verdict { font-weight: 700; margin: 16px 0 4px; }
+  .verdict.ok { color: var(--ok); }
+  .verdict.bad { color: var(--bad); }
+
+  .box { border-radius: 10px; padding: 11px 14px; margin: 10px 0; font-size: .94rem;
+    border: 1px solid var(--line); background: var(--panel-2); }
+  .box .h { font-weight: 700; margin-bottom: 4px; }
+  .box.trap { background: var(--warn-soft); border-color: var(--warn); }
+  .box.danger { background: var(--bad-soft); border-color: var(--bad); }
+  .box.ok { background: var(--ok-soft); border-color: var(--ok); }
+  .box.note { font-size: .86rem; color: var(--muted); }
+
+  .md-reconstructed { border-bottom: 1px dashed var(--muted); color: var(--muted); font-style: italic; }
+  .md-must-know { background: var(--warn-soft); padding: 0 3px; border-radius: 3px; font-weight: 600; }
+  .md-distractor { background: var(--bad-soft); padding: 0 3px; border-radius: 3px; }
+  .md-diagnosis { color: var(--accent); font-weight: 600; }
+  .md-management { color: var(--ok); font-weight: 600; }
+  a.wl { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+
+  .statbar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel);
+    border-top: 1px solid var(--line); padding: 8px 16px; font-size: .84rem;
+    display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; color: var(--muted);
+  }
+  .statbar b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .hide { display: none !important; }
+  .keyhint { font-size: .78rem; color: var(--muted); margin-top: 12px; }
+  kbd { font-family: inherit; font-size: .9em; border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--panel-2); }
+  @media (max-width: 560px) {
+    .qtext { font-size: .98rem; }
+    .keyhint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <h1>MCQ Practice</h1>
+    <div class="grow sub" id="banner">กำลังโหลดคลังโจทย์…</div>
+    <button id="btnSetup">⚙️ ตั้งค่า</button>
+    <button id="btnDash">📊 สรุป</button>
+  </div>
+
+  <!-- ============ SETUP ============ -->
+  <div id="setup" class="card">
+    <div class="fieldlabel">โหมด</div>
+    <div class="chips" id="modeChips"></div>
+
+    <div class="fieldlabel">ระบบ <span class="sub" id="sysHint"></span></div>
+    <div class="chips" id="sysChips"></div>
+
+    <div class="fieldlabel">ชนิดโจทย์</div>
+    <div class="chips" id="typeChips"></div>
+
+    <div class="fieldlabel">ตัวกรอง</div>
+    <div class="row" style="flex-direction:column; align-items:flex-start; gap:7px">
+      <label class="chk"><input type="checkbox" id="fHY"> เฉพาะข้อ 🔥 ออกซ้ำ ≥3 ครั้ง (high-yield)</label>
+      <label class="chk"><input type="checkbox" id="fNoRecon"> ซ่อนข้อที่ AI เติมเนื้อหา 🆕</label>
+      <label class="chk"><input type="checkbox" id="fNoBroken" checked> ซ่อนข้อที่ต้นฉบับ choices ไม่ครบ</label>
+      <label class="chk"><input type="checkbox" id="fShuffle"> สลับตำแหน่ง choice (กันจำตำแหน่งคำตอบ)</label>
+      <label class="chk"><input type="checkbox" id="fWeighted" checked> ให้ข้อที่เคยผิด/ยังไม่เคยทำ ออกบ่อยกว่า</label>
+    </div>
+
+    <div class="fieldlabel">จำนวนข้อในรอบนี้</div>
+    <div class="chips" id="lenChips"></div>
+
+    <div class="row" style="margin-top:18px">
+      <button class="primary" id="btnStart">เริ่มทำโจทย์</button>
+      <span class="sub" id="poolInfo"></span>
+    </div>
+    <div class="keyhint">คีย์ลัด — <kbd>1</kbd>…<kbd>5</kbd> เลือกข้อ · <kbd>Enter</kbd> ข้อถัดไป · <kbd>F</kbd> ติดดาว · <kbd>S</kbd> ข้าม</div>
+  </div>
+
+  <!-- ============ QUIZ ============ -->
+  <div id="quiz" class="hide">
+    <div class="card">
+      <div class="qmeta" id="qmeta"></div>
+      <div class="qtext" id="qtext"></div>
+      <div class="choices" id="choices"></div>
+      <div id="feedback"></div>
+      <div class="row" style="margin-top:16px">
+        <button class="primary" id="btnNext">ข้อถัดไป →</button>
+        <button id="btnStar">☆ ลืมบ่อย</button>
+        <button id="btnSkip">ข้าม</button>
+        <button id="btnFix">✏️ แก้เฉลย</button>
+        <button id="btnObs" class="hide">📓 เปิดโน้ต</button>
+      </div>
+      <div id="fixPanel" class="box hide" style="margin-top:14px">
+        <div class="h">✏️ แก้เฉลยข้อนี้</div>
+        <div class="sub" style="margin-bottom:8px">
+          เก็บไว้ในเครื่องก่อน แล้ว export ไปเขียนกลับเข้าโน้ตด้วย
+          <code>apply_answer_fixes.py</code> — โน้ตคือต้นฉบับจริง
+        </div>
+        <div class="fieldlabel" style="margin-top:0">เฉลยที่ถูกคือ</div>
+        <div class="chips" id="fixLetters"></div>
+        <div class="fieldlabel">เหตุผล (ไม่ใส่ก็ได้ — จะถูกเขียนลงโน้ตด้วย)</div>
+        <input type="text" id="fixReason" placeholder="เช่น ไกด์ไลน์ 2024 เปลี่ยนเป็น…"
+               style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
+                      background:var(--panel); color:var(--text); font:inherit">
+        <div class="row" style="margin-top:12px">
+          <button class="primary" id="fixSave">บันทึกการแก้</button>
+          <button id="fixClear" class="hide">ยกเลิกการแก้ของข้อนี้</button>
+          <button id="fixCancel">ปิด</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div id="dash" class="hide">
+    <div class="card">
+      <div class="fieldlabel">ภาพรวม</div>
+      <div id="dashSummary"></div>
+    </div>
+    <div class="card">
+      <div class="fieldlabel">ความแม่นรายระบบ (เรียงจากอ่อนสุด)</div>
+      <div id="dashSystems"></div>
+    </div>
+    <div class="card">
+      <div class="fieldlabel">ข้อที่ติดดาว / ผิดซ้ำ</div>
+      <div id="dashStars"></div>
+    </div>
+    <div class="card">
+      <div class="fieldlabel">✏️ เฉลยที่แก้เอง (ยังไม่เข้าโน้ต)</div>
+      <div id="dashFixes"></div>
+    </div>
+    <div class="card">
+      <div class="fieldlabel">สำรองข้อมูล</div>
+      <div class="sub" style="margin-bottom:10px">สถิติเก็บใน localStorage ของเบราว์เซอร์นี้เท่านั้น — ล้าง cache แล้วหาย ควร export เก็บไว้</div>
+      <div class="row">
+        <button id="btnExport">⬇️ Export สถิติ</button>
+        <button id="btnImport">⬆️ Import สถิติ</button>
+        <button id="btnReset">🗑️ ล้างสถิติทั้งหมด</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json" class="hide">
+    </div>
+  </div>
+</div>
+
+<div class="statbar" id="statbar"></div>
+
+<script src="data/quiz_bank.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var BANK = window.QUIZ_BANK;
+  var STORAGE_KEY = "caseflow_mcq_practice_v1";
+  var VAULT_NAME = "Obsidian vault";
+
+  if (!BANK || !BANK.questions) {
+    document.getElementById("banner").textContent =
+      "โหลดคลังไม่สำเร็จ — รัน `python build_quiz_bank.py` เพื่อสร้าง quiz/data/quiz_bank.js ก่อน";
+    return;
+  }
+
+  var ALL = BANK.questions;
+  var byId = {};
+  ALL.forEach(function (q) { byId[q.id] = q; });
+
+  // ---------- storage ----------
+  var store = { v: 1, stats: {}, settings: {}, fixes: {}, totals: { seen: 0, correct: 0 } };
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.stats) store = parsed;
+      if (!store.totals) store.totals = { seen: 0, correct: 0 };
+      if (!store.settings) store.settings = {};
+      if (!store.fixes) store.fixes = {};
+    }
+  } catch (e) {}
+
+  // The vault note is the source of truth. A local fix is only a staging area, so
+  // retire it as soon as the rebuilt bank shows the note has moved on.
+  var retired = [];
+  Object.keys(store.fixes).forEach(function (id) {
+    var f = store.fixes[id], q = byIdLookup(id);
+    if (!q) { delete store.fixes[id]; return; }        // id no longer in the bank
+    if (q.answer === f.answer) {
+      retired.push({ id: id, why: "โน้ตแก้ตามแล้ว", to: q.answer });
+      delete store.fixes[id];
+    } else if (f.was && q.answer !== f.was) {
+      retired.push({ id: id, why: "โน้ตเปลี่ยนเป็น " + q.answer + " (ไม่ตรงกับที่แก้ไว้ " + f.answer + ")", to: q.answer });
+      delete store.fixes[id];
+    }
+  });
+  function byIdLookup(id) { return byId[id]; }
+  if (retired.length) save();
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch (e) {}
+  }
+  function stat(id) {
+    if (!store.stats[id]) {
+      store.stats[id] = { seen: 0, correct: 0, wrong: 0, star: 0, auto: 0, last: 0, lastOk: null };
+    }
+    return store.stats[id];
+  }
+  function isStarred(id) {
+    var s = store.stats[id];
+    return !!(s && (s.star || s.auto));
+  }
+  // the answer to grade against: local override wins over the note until committed
+  function effAnswer(q) {
+    var f = store.fixes[q.id];
+    return f ? f.answer : q.answer;
+  }
+
+  // ---------- text rendering ----------
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  var ALLOWED_SPANS = /&lt;span class="(reconstructed|must-know|distractor|diagnosis|management|finding|lab)"&gt;/g;
+  function md(s) {
+    var h = esc(s);
+    // vault notes carry semantic <span> wrappers — keep those, drop everything else
+    h = h.replace(ALLOWED_SPANS, '<span class="md-$1">')
+         .replace(/&lt;\/span&gt;/g, "</span>")
+         .replace(/&lt;span[^&]*&gt;/g, "");
+    h = h.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    h = h.replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g, function (m, name) {
+      return '<a class="wl" target="_blank" href="' + obsUrl(name) + '">' + name + "</a>";
+    });
+    return h.replace(/\n/g, "<br>");
+  }
+  function obsUrl(file) {
+    return "obsidian://open?vault=" + encodeURIComponent(VAULT_NAME) +
+           "&file=" + encodeURIComponent(file);
+  }
+
+  // ---------- filter state ----------
+  var LETTERS = ["A", "B", "C", "D", "E"];
+  var MODES = [
+    { key: "all",    label: "สุ่มทั้งคลัง" },
+    { key: "star",   label: "⭐ เฉพาะข้อที่ลืมบ่อย" },
+    { key: "wrong",  label: "เฉพาะข้อที่เคยตอบผิด" },
+    { key: "unseen", label: "เฉพาะข้อที่ยังไม่เคยทำ" }
+  ];
+  var TYPES = [
+    { key: "mcq",   label: "ข้อสอบจริง" },
+    { key: "twist", label: "🔄 โจทย์บิด" }
+  ];
+  var LENGTHS = [10, 20, 30, 50, 0];
+
+  var sel = {
+    mode: "all",
+    systems: {},      // empty = all
+    types: { mcq: true, twist: true },
+    len: 20
+  };
+  // Systems / types / length are worth remembering; the *mode* is not — reopening
+  // in "เฉพาะข้อที่เคยตอบผิด" with an empty pool reads as a broken app.
+  ["systems", "types", "len"].forEach(function (k) {
+    if (store.settings[k] != null) sel[k] = store.settings[k];
+  });
+  if (!Object.keys(sel.types).some(function (k) { return sel.types[k]; })) {
+    sel.types = { mcq: true, twist: true };
+  }
+
+  var els = {};
+  ["banner", "setup", "quiz", "dash", "modeChips", "sysChips", "typeChips", "lenChips",
+   "sysHint", "poolInfo", "qmeta", "qtext", "choices", "feedback", "statbar",
+   "dashSummary", "dashSystems", "dashStars", "dashFixes"].forEach(function (id) {
+    els[id] = document.getElementById(id);
+  });
+  var cb = {
+    hy: document.getElementById("fHY"),
+    noRecon: document.getElementById("fNoRecon"),
+    noBroken: document.getElementById("fNoBroken"),
+    shuffle: document.getElementById("fShuffle"),
+    weighted: document.getElementById("fWeighted")
+  };
+  Object.keys(cb).forEach(function (k) {
+    if (store.settings["cb_" + k] != null) cb[k].checked = store.settings["cb_" + k];
+    cb[k].addEventListener("change", function () {
+      store.settings["cb_" + k] = cb[k].checked;
+      save(); updatePoolInfo();
+    });
+  });
+
+  function systemCounts() {
+    var m = {};
+    ALL.forEach(function (q) {
+      q.systems.forEach(function (s) { m[s] = (m[s] || 0) + 1; });
+    });
+    return m;
+  }
+
+  function matches(q) {
+    if (!sel.types[q.type]) return false;
+    var syskeys = Object.keys(sel.systems).filter(function (k) { return sel.systems[k]; });
+    if (syskeys.length) {
+      var hit = q.systems.some(function (s) { return sel.systems[s]; });
+      if (!hit) return false;
+    }
+    if (cb.hy.checked && q.flags.indexOf("high_yield") < 0) return false;
+    if (cb.noRecon.checked && q.flags.indexOf("reconstructed") >= 0) return false;
+    if (cb.noBroken.checked && q.flags.indexOf("incomplete_choices") >= 0) return false;
+    var s = store.stats[q.id];
+    if (sel.mode === "star" && !isStarred(q.id)) return false;
+    if (sel.mode === "wrong" && !(s && s.wrong > 0)) return false;
+    if (sel.mode === "unseen" && s && s.seen > 0) return false;
+    return true;
+  }
+
+  function pool() { return ALL.filter(matches); }
+
+  // ---------- queue ----------
+  var queue = [], qIndex = -1, current = null, answered = false, shownOrder = null;
+  var session = { seen: 0, correct: 0, streak: 0, best: 0 };
+  var lastAttempt = null;   // lets a fix saved right after answering undo the tally
+
+  function weightFor(q) {
+    var s = store.stats[q.id];
+    var w = 1;
+    if (!s || !s.seen) w = 2.2;                        // never attempted
+    else if (s.wrong > s.correct) w = 3.5;             // consistently missed
+    else if (s.lastOk === false) w = 2.5;              // missed most recently
+    else if (s.correct >= 2) w = 0.35;                 // solid
+    if (isStarred(q.id)) w *= 2;
+    if (q.flags.indexOf("high_yield") >= 0) w *= 1.4;
+    return w;
+  }
+
+  function buildQueue() {
+    var p = pool();
+    if (!p.length) return [];
+    var picked;
+    if (cb.weighted.checked) {
+      var items = p.map(function (q) { return { q: q, w: weightFor(q) }; });
+      picked = [];
+      var n = sel.len > 0 ? Math.min(sel.len, items.length) : items.length;
+      for (var k = 0; k < n; k++) {
+        var total = items.reduce(function (a, it) { return a + it.w; }, 0);
+        var r = Math.random() * total, acc = 0, idx = 0;
+        for (var i = 0; i < items.length; i++) {
+          acc += items[i].w;
+          if (r <= acc) { idx = i; break; }
+        }
+        picked.push(items[idx].q);
+        items.splice(idx, 1);
+      }
+    } else {
+      picked = shuffle(p.slice());
+      if (sel.len > 0) picked = picked.slice(0, sel.len);
+    }
+    return picked;
+  }
+
+  function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // ---------- views ----------
+  function show(view) {
+    els.setup.classList.toggle("hide", view !== "setup");
+    els.quiz.classList.toggle("hide", view !== "quiz");
+    els.dash.classList.toggle("hide", view !== "dash");
+  }
+
+  function renderChips() {
+    els.modeChips.innerHTML = "";
+    MODES.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "chip" + (sel.mode === m.key ? " on" : "");
+      c.textContent = m.label;
+      c.onclick = function () {
+        sel.mode = m.key;
+        renderChips(); updatePoolInfo();
+      };
+      els.modeChips.appendChild(c);
+    });
+
+    var counts = systemCounts();
+    els.sysChips.innerHTML = "";
+    var anySys = Object.keys(sel.systems).some(function (k) { return sel.systems[k]; });
+    els.sysHint.textContent = anySys ? "" : "(ไม่เลือก = ทุกระบบ)";
+    BANK.meta.systems.forEach(function (s) {
+      var c = document.createElement("div");
+      c.className = "chip" + (sel.systems[s] ? " on" : "");
+      c.innerHTML = esc(s) + '<span class="n">' + (counts[s] || 0) + "</span>";
+      c.onclick = function () {
+        sel.systems[s] = !sel.systems[s];
+        store.settings.systems = sel.systems; save();
+        renderChips(); updatePoolInfo();
+      };
+      els.sysChips.appendChild(c);
+    });
+
+    els.typeChips.innerHTML = "";
+    TYPES.forEach(function (t) {
+      var n = ALL.filter(function (q) { return q.type === t.key; }).length;
+      var c = document.createElement("div");
+      c.className = "chip" + (sel.types[t.key] ? " on" : "");
+      c.innerHTML = esc(t.label) + '<span class="n">' + n + "</span>";
+      c.onclick = function () {
+        var on = Object.keys(sel.types).filter(function (k) { return sel.types[k]; });
+        if (on.length === 1 && sel.types[t.key]) return;  // keep at least one
+        sel.types[t.key] = !sel.types[t.key];
+        store.settings.types = sel.types; save();
+        renderChips(); updatePoolInfo();
+      };
+      els.typeChips.appendChild(c);
+    });
+
+    els.lenChips.innerHTML = "";
+    LENGTHS.forEach(function (n) {
+      var c = document.createElement("div");
+      c.className = "chip" + (sel.len === n ? " on" : "");
+      c.textContent = n === 0 ? "ทั้งหมด" : n + " ข้อ";
+      c.onclick = function () {
+        sel.len = n; store.settings.len = n; save();
+        renderChips(); updatePoolInfo();
+      };
+      els.lenChips.appendChild(c);
+    });
+  }
+
+  function updatePoolInfo() {
+    var n = pool().length;
+    els.poolInfo.textContent = n
+      ? "เข้าเงื่อนไข " + n + " ข้อ" + (sel.len > 0 && sel.len < n ? " → สุ่มมา " + sel.len + " ข้อ" : "")
+      : "ไม่มีข้อที่เข้าเงื่อนไข — ลองปลดตัวกรองบางอัน";
+    document.getElementById("btnStart").disabled = !n;
+  }
+
+  function renderBanner() {
+    var m = BANK.meta;
+    var txt = m.total + " ข้อในคลัง (ข้อสอบจริง " + m.mcq +
+      " + โจทย์บิด " + m.twist + ") · " + m.systems.length + " ระบบ";
+    // if this timestamp is older than your last build, the browser cached the bank
+    // — hard-refresh with Ctrl+Shift+R
+    if (m.built_at) txt += " · คลังสร้าง " + m.built_at;
+    if (retired.length) txt += " · ✅ โน้ตอัปเดตแล้ว " + retired.length + " ข้อ (ดูใน 📊 สรุป)";
+    els.banner.textContent = txt;
+  }
+
+  function renderStatbar() {
+    var ids = Object.keys(store.stats);
+    var starred = ids.filter(isStarred).length;
+    var t = store.totals;
+    var acc = t.seen ? Math.round(t.correct / t.seen * 100) : 0;
+    var parts = [
+      "รอบนี้ <b>" + session.seen + "</b>" + (queue.length ? "/" + queue.length : "") + " ข้อ",
+      "ถูก <b>" + session.correct + "</b>" +
+        (session.seen ? " (" + Math.round(session.correct / session.seen * 100) + "%)" : ""),
+      "ต่อเนื่อง <b>" + session.streak + "</b>",
+      "⭐ <b>" + starred + "</b> ข้อ",
+      "สะสม <b>" + t.seen + "</b> ครั้ง / แม่น <b>" + acc + "%</b>"
+    ];
+    if (fixCount()) parts.push("✏️ แก้เฉลย <b>" + fixCount() + "</b> ข้อ (รอเข้าโน้ต)");
+    els.statbar.innerHTML = parts.join(" · ");
+  }
+
+  function renderQuestion() {
+    var q = current;
+    answered = false;
+    var s = store.stats[q.id];
+
+    var badges = [];
+    badges.push('<span class="badge">' + esc(q.systems.join(" / ")) + "</span>");
+    badges.push('<span class="badge">' + esc(q.id) + (q.year ? " · " + q.year : "") + "</span>");
+    if (q.type === "twist") badges.push('<span class="badge tw">🔄 โจทย์บิด</span>');
+    if (q.repeat_count >= 3) {
+      badges.push('<span class="badge hy">🔥 ออกซ้ำ ' + q.repeat_count + " ครั้ง</span>");
+    } else if (q.repeat_count === 2) {
+      badges.push('<span class="badge">ออกซ้ำ 2 ครั้ง</span>');
+    }
+    if (q.flags.indexOf("guideline_check") >= 0 || q.outdated) {
+      badges.push('<span class="badge" title="เฉลยอาจขึ้นกับไกด์ไลน์ — ดูหมายเหตุหลังตอบ">📅 เช็คไกด์ไลน์</span>');
+    }
+    if (q.conflict) {
+      badges.push('<span class="badge" title="ข้อซ้ำให้เฉลยไม่ตรงกัน">⚠️ เฉลยขัดกัน (' + esc(q.conflict) + ")</span>");
+    }
+    if (store.fixes[q.id]) {
+      badges.push('<span class="badge st" title="เฉลยที่คุณแก้เอง ยังไม่เข้าโน้ต">✏️ เฉลยแก้เอง</span>');
+    } else if (q.fixed) {
+      badges.push('<span class="badge" title="แก้ในโน้ตแล้ว">✏️ เฉลยแก้แล้วในโน้ต</span>');
+    }
+    if (isStarred(q.id)) badges.push('<span class="badge st">⭐ ลืมบ่อย</span>');
+    if (s && s.seen) {
+      badges.push('<span class="badge">เคยทำ ' + s.seen + " ครั้ง · ถูก " + s.correct + "</span>");
+    }
+    els.qmeta.innerHTML = badges.join("");
+    els.qtext.innerHTML = md(q.question);
+
+    // choice order: original, or shuffled with the original letter kept visible
+    var keys = LETTERS.filter(function (L) { return q.choices[L] != null; });
+    Object.keys(q.choices).forEach(function (L) {
+      if (keys.indexOf(L) < 0) keys.push(L);
+    });
+    shownOrder = cb.shuffle.checked ? shuffle(keys.slice()) : keys;
+
+    els.choices.innerHTML = "";
+    shownOrder.forEach(function (L, i) {
+      var b = document.createElement("button");
+      b.className = "choice";
+      b.dataset.letter = L;
+      var shownLetter = cb.shuffle.checked ? LETTERS[i] : L;
+      var origTag = cb.shuffle.checked ? '<span class="orig">(เดิม ' + L + ")</span>" : "";
+      b.innerHTML = '<span class="let">' + shownLetter + ".</span><span>" +
+                    md(q.choices[L]) + origTag + "</span>";
+      b.onclick = function () { answer(L); };
+      els.choices.appendChild(b);
+    });
+
+    els.feedback.innerHTML = "";
+    closeFixPanel();
+    document.getElementById("btnStar").textContent = isStarred(q.id) ? "★ ติดดาวแล้ว" : "☆ ลืมบ่อย";
+    var obs = document.getElementById("btnObs");
+    obs.classList.toggle("hide", !q.topic);
+    if (q.topic) obs.onclick = function () { window.open(obsUrl(q.topic), "_blank"); };
+    renderStatbar();
+    window.scrollTo(0, 0);
+  }
+
+  function answer(letter) {
+    if (answered) return;
+    answered = true;
+    var q = current;
+    var correctLetter = effAnswer(q);
+    var ok = letter === correctLetter;
+    var s = stat(q.id);
+    s.seen++; s.last = Date.now(); s.lastOk = ok;
+    if (ok) { s.correct++; } else { s.wrong++; }
+    // auto-leech: missed twice or more without asking the user to tick anything
+    if (s.wrong >= 2 && !s.star) s.auto = 1;
+    store.totals.seen++;
+    if (ok) store.totals.correct++;
+    session.seen++;
+    if (ok) { session.correct++; session.streak++; session.best = Math.max(session.best, session.streak); }
+    else session.streak = 0;
+    lastAttempt = { id: q.id, letter: letter, ok: ok, autoSet: (s.wrong >= 2 && !s.star) };
+    save();
+
+    Array.prototype.forEach.call(els.choices.children, function (b) {
+      var L = b.dataset.letter;
+      b.disabled = true;
+      if (L === correctLetter) b.classList.add("correct");
+      else if (L === letter) b.classList.add("wrong");
+      else b.classList.add("dim");
+    });
+
+    // when choices are shuffled the user sees different letters than the source's,
+    // so name the letter that's actually on screen (source letter in parentheses)
+    var shownAns = correctLetter;
+    if (cb.shuffle.checked && shownOrder) {
+      var pos = shownOrder.indexOf(correctLetter);
+      if (pos >= 0) shownAns = LETTERS[pos] + " (เดิม " + correctLetter + ")";
+    }
+    var html = '<div class="verdict ' + (ok ? "ok" : "bad") + '">' +
+      (ok ? "✅ ถูกต้อง" : "❌ ผิด — เฉลยคือ " + shownAns) + "</div>";
+
+    var myFix = store.fixes[q.id];
+    if (myFix) {
+      html += box("", "✏️ ใช้เฉลยที่คุณแก้เอง — " + myFix.answer,
+        "โน้ตยังตอบ **" + q.answer + "** อยู่" +
+        (myFix.reason ? "\nเหตุผลที่บันทึกไว้: " + myFix.reason : "") +
+        "\n*ยัง**ไม่ได้**เขียนกลับเข้าโน้ต — ไปที่ 📊 สรุป เพื่อ export แล้วรัน apply_answer_fixes.py*");
+    } else if (q.fixed) {
+      html += box("ok", "✏️ เฉลยข้อนี้ถูกแก้ในโน้ตแล้ว (" + q.fixed.at + ")",
+        "ต้นฉบับตอบ **" + q.fixed.was + "** → แก้เป็น **" + q.fixed.to + "**" +
+        (q.fixed.reason ? " — " + q.fixed.reason : ""));
+    }
+
+    if (q.outdated) {
+      html += box("danger", "⚠️ เฉลยเดิมล้าสมัยแล้ว — อย่าท่องตามข้อสอบ", q.outdated);
+    }
+    if (q.conflict) {
+      html += box("", "⚠️ ข้อซ้ำให้เฉลยไม่ตรงกัน (" + q.conflict + ")",
+        "แหล่งที่มาต่างฉบับเฉลยไม่เหมือนกัน — ยึดตามที่แสดงแต่ควรเช็คซ้ำ");
+    }
+    if (q.explanation) {
+      html += box("", q.type === "twist" ? "💡 ทำไมคำตอบเปลี่ยน" : "เฉลย/คำอธิบาย", q.explanation);
+    }
+    if (q.trap) {
+      html += box("trap", q.type === "twist" ? "🔀 บิดตรงไหน" : "⚠️ กับดัก", q.trap);
+    }
+    if (q.usmle) html += box("", "🔬 วิเคราะห์แบบ USMLE", q.usmle);
+    if (q.verified) html += box("ok", "✅ ตรวจกับไกด์ไลน์ปัจจุบันแล้ว — เฉลยนี้ยังถูกต้อง", q.verified);
+    else if (q.flags.indexOf("guideline_check") >= 0) {
+      html += box("trap", "📅 ยังไม่ได้ตรวจกับไกด์ไลน์ปัจจุบัน",
+        "คำตอบข้อนี้ขึ้นกับค่าเป้าหมาย/ยา first-line/เกณฑ์ที่อาจเปลี่ยนไปแล้ว — เทียบไกด์ไลน์ล่าสุดก่อนท่อง");
+    }
+    if (q.note) html += box("note", "", q.note);
+
+    var srcBits = [];
+    if (q.source) srcBits.push(esc(q.source));
+    if (q.repeat_ids && q.repeat_ids.length > 1) srcBits.push("Q-IDs: " + esc(q.repeat_ids.join(", ")));
+    if (q.type === "twist") srcBits.push("บิดจากข้อ " + esc(q.parent));
+    if (srcBits.length) {
+      html += '<div class="box note">ที่มา: ' + srcBits.join(" · ") + "</div>";
+    }
+
+    els.feedback.innerHTML = html;
+    document.getElementById("btnStar").textContent = isStarred(q.id) ? "★ ติดดาวแล้ว" : "☆ ลืมบ่อย";
+    renderQuestionBadgeStar();   // auto-leech may have just starred this one
+    renderStatbar();
+  }
+
+  // ---------- answer fixes ----------
+  var fixPanel = document.getElementById("fixPanel");
+
+  function closeFixPanel() { fixPanel.classList.add("hide"); }
+
+  function openFixPanel() {
+    if (!current) return;
+    var q = current;
+    var f = store.fixes[q.id];
+    var letters = Object.keys(q.choices).sort();
+    var wrap = document.getElementById("fixLetters");
+    wrap.innerHTML = "";
+    var chosen = f ? f.answer : null;
+    letters.forEach(function (L) {
+      var c = document.createElement("div");
+      c.className = "chip" + (chosen === L ? " on" : "");
+      c.textContent = L + (L === q.answer ? " (โน้ตตอบข้อนี้)" : "");
+      c.onclick = function () {
+        chosen = L;
+        Array.prototype.forEach.call(wrap.children, function (x) { x.classList.remove("on"); });
+        c.classList.add("on");
+      };
+      wrap.appendChild(c);
+    });
+    document.getElementById("fixReason").value = f ? (f.reason || "") : "";
+    document.getElementById("fixClear").classList.toggle("hide", !f);
+    document.getElementById("fixSave").onclick = function () {
+      if (!chosen) { alert("เลือกตัวอักษรที่เป็นเฉลยที่ถูกก่อน"); return; }
+      if (chosen === q.answer) {
+        // same as the note — nothing to override
+        delete store.fixes[q.id];
+      } else {
+        store.fixes[q.id] = {
+          answer: chosen,
+          was: q.answer,
+          reason: document.getElementById("fixReason").value.trim(),
+          at: new Date().toISOString().slice(0, 10)
+        };
+      }
+      undoLastAttemptFor(q.id);
+      save();
+      closeFixPanel();
+      renderQuestion();   // re-ask the card, now graded against the corrected answer
+    };
+    document.getElementById("fixClear").onclick = function () {
+      delete store.fixes[q.id];
+      undoLastAttemptFor(q.id);
+      save(); closeFixPanel(); renderQuestion();
+    };
+    fixPanel.classList.remove("hide");
+  }
+
+  function fixCount() { return Object.keys(store.fixes).length; }
+
+  // Correcting the answer key means the attempt just graded against the old key
+  // shouldn't count — roll it back so the accuracy figures stay honest.
+  function undoLastAttemptFor(id) {
+    if (!lastAttempt || lastAttempt.id !== id) return;
+    var s = store.stats[id];
+    if (s && s.seen > 0) {
+      s.seen--;
+      if (lastAttempt.ok) s.correct = Math.max(0, s.correct - 1);
+      else s.wrong = Math.max(0, s.wrong - 1);
+      if (lastAttempt.autoSet) s.auto = 0;
+      s.lastOk = null;
+    }
+    store.totals.seen = Math.max(0, store.totals.seen - 1);
+    if (lastAttempt.ok) store.totals.correct = Math.max(0, store.totals.correct - 1);
+    session.seen = Math.max(0, session.seen - 1);
+    if (lastAttempt.ok) session.correct = Math.max(0, session.correct - 1);
+    lastAttempt = null;
+  }
+
+  function exportFixes() {
+    var n = fixCount();
+    if (!n) { alert("ยังไม่มีเฉลยที่แก้เอง"); return; }
+    var payload = { generated: new Date().toISOString(), fixes: store.fixes };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "mcq_answer_fixes_" +
+      new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function renderFixes() {
+    var ids = Object.keys(store.fixes);
+    var head = "";
+    if (retired.length) {
+      head = '<div class="box ok"><div class="h">✅ โน้ตอัปเดตแล้ว ' + retired.length +
+        " ข้อ — เลิกใช้เฉลยที่แก้ไว้ในเครื่อง</div>" +
+        retired.map(function (r) { return "- " + esc(r.id) + " — " + esc(r.why); }).join("<br>") +
+        "</div>";
+    }
+    if (!ids.length) {
+      els.dashFixes.innerHTML = head +
+        '<div class="sub">ยังไม่มี — เจอข้อที่เฉลยผิด กดปุ่ม <b>✏️ แก้เฉลย</b> ตอนทำโจทย์</div>';
+      return;
+    }
+    var h = head + "<table><tr><th>ข้อ</th><th>โน้ตตอบ</th><th>แก้เป็น</th><th>เหตุผล</th><th></th></tr>";
+    ids.forEach(function (id) {
+      var f = store.fixes[id], q = byId[id];
+      h += "<tr><td>" + esc(id) + "</td><td>" + esc(f.was || (q ? q.answer : "?")) +
+           "</td><td><b>" + esc(f.answer) + "</b></td><td>" + esc(f.reason || "—") +
+           "</td><td><button data-unfix='" + esc(id) + "'>ลบ</button></td></tr>";
+    });
+    h += "</table>" +
+      '<div class="row" style="margin-top:12px">' +
+      '<button class="primary" id="btnExportFixes">⬇️ Export ไฟล์แก้เฉลย (' + ids.length + " ข้อ)</button></div>" +
+      '<div class="box note" style="margin-top:12px">เขียนกลับเข้าโน้ต (โน้ต = ต้นฉบับจริง):<br>' +
+      "<code>python apply_answer_fixes.py --fixes &lt;ไฟล์ที่ export&gt;</code> ← ดูผลก่อน<br>" +
+      "<code>python apply_answer_fixes.py --fixes &lt;ไฟล์&gt; --apply</code> ← เขียนจริง<br>" +
+      "<code>python build_quiz_bank.py</code> ← สร้างคลังใหม่ แล้วรายการนี้จะหายไปเอง</div>";
+    els.dashFixes.innerHTML = h;
+    document.getElementById("btnExportFixes").onclick = exportFixes;
+    Array.prototype.forEach.call(els.dashFixes.querySelectorAll("[data-unfix]"), function (b) {
+      b.onclick = function () {
+        delete store.fixes[b.dataset.unfix];
+        save(); renderFixes();
+      };
+    });
+  }
+
+  function box(cls, head, body) {
+    return '<div class="box ' + cls + '">' +
+      (head ? '<div class="h">' + esc(head) + "</div>" : "") + md(body) + "</div>";
+  }
+
+  function next() {
+    qIndex++;
+    if (qIndex >= queue.length) return finishRound();
+    current = queue[qIndex];
+    renderQuestion();
+  }
+
+  function finishRound() {
+    show("quiz");
+    els.qmeta.innerHTML = "";
+    els.qtext.innerHTML = "";
+    els.choices.innerHTML = "";
+    var acc = session.seen ? Math.round(session.correct / session.seen * 100) : 0;
+    var wrongIds = queue.filter(function (q) {
+      var s = store.stats[q.id];
+      return s && s.lastOk === false;
+    });
+    var html = '<div class="verdict ' + (acc >= 70 ? "ok" : "bad") + '">จบรอบ — ' +
+      session.correct + "/" + session.seen + " ข้อ (" + acc + "%)</div>";
+    if (wrongIds.length) {
+      html += box("trap", "ข้อที่พลาดในรอบนี้ (" + wrongIds.length + " ข้อ)",
+        wrongIds.map(function (q) {
+          return "- " + q.id + " — " + q.systems.join("/") +
+                 (q.topic ? " · " + q.topic : "");
+        }).join("\n"));
+      html += '<div class="sub">ข้อที่ผิด ≥2 ครั้งจะถูกติดดาวอัตโนมัติ — เลือกโหมด "⭐ เฉพาะข้อที่ลืมบ่อย" เพื่อวนทบทวน</div>';
+    }
+    els.feedback.innerHTML = html;
+    document.getElementById("btnNext").textContent = "ตั้งค่ารอบใหม่";
+    document.getElementById("btnNext").onclick = function () {
+      document.getElementById("btnNext").textContent = "ข้อถัดไป →";
+      document.getElementById("btnNext").onclick = next;
+      renderChips(); updatePoolInfo(); show("setup");
+    };
+  }
+
+  function startRound() {
+    queue = buildQueue();
+    if (!queue.length) return;
+    qIndex = -1;
+    session = { seen: 0, correct: 0, streak: 0, best: 0 };
+    show("quiz");
+    next();
+  }
+
+  // ---------- dashboard ----------
+  function renderDash() {
+    var t = store.totals;
+    var ids = Object.keys(store.stats);
+    var attempted = ids.filter(function (id) { return store.stats[id].seen > 0 && byId[id]; });
+    var starred = ids.filter(function (id) { return isStarred(id) && byId[id]; });
+    var acc = t.seen ? Math.round(t.correct / t.seen * 100) : 0;
+    els.dashSummary.innerHTML =
+      "<div>ทำไปแล้ว <b>" + attempted.length + "</b> / " + ALL.length +
+      " ข้อในคลัง · ตอบไปทั้งหมด <b>" + t.seen + "</b> ครั้ง · ความแม่นรวม <b>" + acc + "%</b></div>" +
+      '<div class="bar" style="margin-top:8px"><i style="width:' +
+      (ALL.length ? attempted.length / ALL.length * 100 : 0) + '%"></i></div>' +
+      '<div class="sub" style="margin-top:6px">ติดดาวอยู่ ' + starred.length + " ข้อ</div>";
+
+    // per-system accuracy
+    var agg = {};
+    ALL.forEach(function (q) {
+      var s = store.stats[q.id];
+      if (!s || !s.seen) return;
+      q.systems.forEach(function (sys) {
+        if (!agg[sys]) agg[sys] = { seen: 0, correct: 0, cards: 0 };
+        agg[sys].seen += s.seen;
+        agg[sys].correct += s.correct;
+        agg[sys].cards++;
+      });
+    });
+    var rows = Object.keys(agg).map(function (sys) {
+      var a = agg[sys];
+      return { sys: sys, pct: a.seen ? a.correct / a.seen * 100 : 0, seen: a.seen, cards: a.cards };
+    }).sort(function (x, y) { return x.pct - y.pct; });
+
+    if (!rows.length) {
+      els.dashSystems.innerHTML = '<div class="sub">ยังไม่มีข้อมูล — ทำโจทย์ก่อน</div>';
+    } else {
+      var h = "<table><tr><th>ระบบ</th><th class='num'>ข้อที่ทำ</th><th class='num'>ตอบ</th><th class='num'>แม่น</th></tr>";
+      rows.forEach(function (r) {
+        h += "<tr><td>" + esc(r.sys) + "</td><td class='num'>" + r.cards +
+             "</td><td class='num'>" + r.seen + "</td><td class='num'>" +
+             Math.round(r.pct) + "%</td></tr>";
+      });
+      els.dashSystems.innerHTML = h + "</table>";
+    }
+
+    if (!starred.length) {
+      els.dashStars.innerHTML = '<div class="sub">ยังไม่มีข้อติดดาว — กด <b>F</b> หรือปุ่ม ☆ ตอนทำโจทย์ (ผิด 2 ครั้งระบบติดให้เอง)</div>';
+    } else {
+      var h2 = "<table><tr><th>ข้อ</th><th>ระบบ</th><th class='num'>ผิด</th><th class='num'>ถูก</th><th></th></tr>";
+      starred.sort(function (a, b) { return store.stats[b].wrong - store.stats[a].wrong; })
+        .forEach(function (id) {
+          var s = store.stats[id], q = byId[id];
+          h2 += "<tr><td>" + esc(id) + (s.auto && !s.star ? " <span class='sub'>(auto)</span>" : "") +
+                "</td><td>" + esc(q.systems.join("/")) + "</td><td class='num'>" + s.wrong +
+                "</td><td class='num'>" + s.correct +
+                "</td><td><button data-unstar='" + esc(id) + "'>ปลดดาว</button></td></tr>";
+        });
+      els.dashStars.innerHTML = h2 + "</table>";
+      Array.prototype.forEach.call(els.dashStars.querySelectorAll("[data-unstar]"), function (b) {
+        b.onclick = function () {
+          var s = stat(b.dataset.unstar);
+          s.star = 0; s.auto = 0; save(); renderDash(); renderStatbar();
+        };
+      });
+    }
+  }
+
+  // ---------- wiring ----------
+  document.getElementById("btnStart").onclick = startRound;
+  document.getElementById("btnNext").onclick = next;
+  document.getElementById("btnSkip").onclick = next;
+  document.getElementById("btnSetup").onclick = function () {
+    renderChips(); updatePoolInfo(); show("setup");
+  };
+  document.getElementById("btnDash").onclick = function () {
+    renderDash(); renderFixes(); show("dash");
+  };
+  document.getElementById("btnFix").onclick = function () {
+    if (fixPanel.classList.contains("hide")) openFixPanel(); else closeFixPanel();
+  };
+  document.getElementById("fixCancel").onclick = closeFixPanel;
+  document.getElementById("btnStar").onclick = function () {
+    if (!current) return;
+    var s = stat(current.id);
+    var on = isStarred(current.id);
+    s.star = on ? 0 : 1;
+    if (on) s.auto = 0;
+    save();
+    document.getElementById("btnStar").textContent = isStarred(current.id) ? "★ ติดดาวแล้ว" : "☆ ลืมบ่อย";
+    renderQuestionBadgeStar();
+    renderStatbar();
+  };
+  function renderQuestionBadgeStar() {
+    // refresh just the star badge without rebuilding the answered state
+    var has = els.qmeta.querySelector(".badge.st");
+    if (isStarred(current.id) && !has) {
+      var b = document.createElement("span");
+      b.className = "badge st";
+      b.textContent = "⭐ ลืมบ่อย";
+      els.qmeta.appendChild(b);
+    } else if (!isStarred(current.id) && has) {
+      has.remove();
+    }
+  }
+
+  document.getElementById("btnExport").onclick = function () {
+    var blob = new Blob([JSON.stringify(store, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "mcq_practice_stats_" +
+      new Date().toISOString().slice(0, 10).replace(/-/g, "") + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  document.getElementById("btnImport").onclick = function () {
+    document.getElementById("fileImport").click();
+  };
+  document.getElementById("fileImport").onchange = function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      try {
+        var incoming = JSON.parse(fr.result);
+        if (!incoming || !incoming.stats) throw new Error("bad file");
+        // merge: keep the higher counts per question so a restore never loses work
+        Object.keys(incoming.stats).forEach(function (id) {
+          var a = store.stats[id], b = incoming.stats[id];
+          if (!a) { store.stats[id] = b; return; }
+          a.seen = Math.max(a.seen, b.seen || 0);
+          a.correct = Math.max(a.correct, b.correct || 0);
+          a.wrong = Math.max(a.wrong, b.wrong || 0);
+          a.star = a.star || b.star || 0;
+          a.auto = a.auto || b.auto || 0;
+          if ((b.last || 0) > (a.last || 0)) { a.last = b.last; a.lastOk = b.lastOk; }
+        });
+        if (incoming.totals) {
+          store.totals.seen = Math.max(store.totals.seen, incoming.totals.seen || 0);
+          store.totals.correct = Math.max(store.totals.correct, incoming.totals.correct || 0);
+        }
+        // answer corrections are hand-made work — never drop them on import
+        Object.keys(incoming.fixes || {}).forEach(function (id) {
+          if (!store.fixes[id] && byId[id] && byId[id].answer !== incoming.fixes[id].answer) {
+            store.fixes[id] = incoming.fixes[id];
+          }
+        });
+        save(); renderDash(); renderFixes(); renderStatbar();
+        alert("นำเข้าสถิติแล้ว (รวมกับของเดิม)");
+      } catch (err) {
+        alert("ไฟล์ไม่ถูกต้อง: " + err.message);
+      }
+    };
+    fr.readAsText(f);
+    e.target.value = "";
+  };
+  document.getElementById("btnReset").onclick = function () {
+    if (!confirm("ล้างสถิติและดาวทั้งหมด? กู้คืนไม่ได้ (export เก็บไว้ก่อนไหม)\n\n" +
+                 "เฉลยที่แก้เองจะยังอยู่ — ลบแยกได้ในหัวข้อ ✏️")) return;
+    store = { v: 1, stats: {}, settings: store.settings, fixes: store.fixes,
+              totals: { seen: 0, correct: 0 } };
+    save(); renderDash(); renderFixes(); renderStatbar();
+  };
+
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if (els.quiz.classList.contains("hide")) {
+      if (e.key === "Enter" && !document.getElementById("btnStart").disabled) {
+        e.preventDefault(); startRound();
+      }
+      return;
+    }
+    var k = e.key.toLowerCase();
+    if (!answered && /^[1-5]$/.test(k) && shownOrder) {
+      var i = parseInt(k, 10) - 1;
+      if (i < shownOrder.length) { e.preventDefault(); answer(shownOrder[i]); }
+      return;
+    }
+    if (!answered && /^[a-e]$/.test(k) && shownOrder) {
+      var idx = LETTERS.indexOf(k.toUpperCase());
+      if (idx >= 0 && idx < shownOrder.length) { e.preventDefault(); answer(shownOrder[idx]); }
+      return;
+    }
+    if (k === "enter" || k === " ") { e.preventDefault(); next(); return; }
+    if (k === "f") { e.preventDefault(); document.getElementById("btnStar").click(); return; }
+    if (k === "s") { e.preventDefault(); next(); }
+  });
+
+  renderBanner();
+  renderChips();
+  updatePoolInfo();
+  renderStatbar();
+  show("setup");
+})();
+</script>
+</body>
+</html>
