@@ -114,6 +114,14 @@
   .box.note { font-size: .86rem; color: var(--muted); }
 
   .md-reconstructed { border-bottom: 1px dashed var(--muted); color: var(--muted); font-style: italic; }
+  /* The 🆕 tag and the reconstructed styling mark text an AI filled in — which
+     on a choice is a giveaway, since a reconstructed option is almost never the
+     real answer. Suppress both inside the choice list until the answer is in,
+     then reveal so the provenance is still visible while reviewing. */
+  #choices:not(.revealed) .newtag { display: none; }
+  #choices:not(.revealed) .md-reconstructed {
+    border-bottom: none; color: inherit; font-style: normal;
+  }
   .md-must-know { background: var(--warn-soft); padding: 0 3px; border-radius: 3px; font-weight: 600; }
   .md-distractor { background: var(--bad-soft); padding: 0 3px; border-radius: 3px; }
   .md-diagnosis { color: var(--accent); font-weight: 600; }
@@ -334,6 +342,11 @@
       return '<a class="wl" target="_blank" href="' + obsUrl(name) + '">' + name + "</a>";
     });
     return h.replace(/\n/g, "<br>");
+  }
+  // The 🆕 marker lives as a literal character inside the note text, so it can
+  // only be hidden by wrapping it first — CSS has nothing else to target.
+  function tagNew(html) {
+    return html.replace(/🆕/g, '<span class="newtag">🆕</span>');
   }
   function obsUrl(file) {
     return "obsidian://open?vault=" + encodeURIComponent(VAULT_NAME) +
@@ -608,6 +621,7 @@
     shownOrder = cb.shuffle.checked ? shuffle(keys.slice()) : keys;
 
     els.choices.innerHTML = "";
+    els.choices.classList.remove("revealed");
     shownOrder.forEach(function (L, i) {
       var b = document.createElement("button");
       b.className = "choice";
@@ -615,7 +629,7 @@
       var shownLetter = cb.shuffle.checked ? LETTERS[i] : L;
       var origTag = cb.shuffle.checked ? '<span class="orig">(เดิม ' + L + ")</span>" : "";
       b.innerHTML = '<span class="let">' + shownLetter + ".</span><span>" +
-                    md(q.choices[L]) + origTag + "</span>";
+                    tagNew(md(q.choices[L])) + origTag + "</span>";
       b.onclick = function () { answer(L); };
       els.choices.appendChild(b);
     });
@@ -649,6 +663,7 @@
     lastAttempt = { id: q.id, letter: letter, ok: ok, autoSet: (s.wrong >= 2 && !s.star) };
     save();
 
+    els.choices.classList.add("revealed");
     Array.prototype.forEach.call(els.choices.children, function (b) {
       var L = b.dataset.letter;
       b.disabled = true;
